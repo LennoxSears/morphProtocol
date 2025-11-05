@@ -106,8 +106,3 @@ export class Encryptor {
         return d_receive;
     }
 }
-
-// let encryptor = new Encryptor('testPassword123');
-// encryptor.setSimple("B9EMizUe2tP3dqu8GlX3amO3uERua9HhPVqANMWyXUY=:0y7LOFmW415sBKGUQ5A0Fg==")
-// console.log(encryptor.simpleEncrypt("1526"))
-// console.log(encryptor.simpleDecrypt(encryptor.simpleEncrypt("1526")))

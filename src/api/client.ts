@@ -1,6 +1,7 @@
 import axios, { AxiosResponse } from 'axios';
 import { getServerConfig } from '../config';
 import { SubTrafficRequest, ClientNumRequest, UpdateServerInfoRequest } from './types';
+import { logger } from '../utils/logger';
 
 const config = getServerConfig();
 const subTrafficUrl = config.api.subTrafficUrl;
@@ -20,11 +21,10 @@ export const subTraffic = async (userId: string | undefined, traffic: number | u
             }
         })
             .then(function (response: AxiosResponse) {
-                // You can now work with the JSON response data directly
-                console.log(response.data)
+                logger.debug('Traffic subtracted', { userId, traffic, response: response.data });
             })
             .catch(function (error: any) {
-                console.error('axios error：', error);
+                logger.error('Failed to subtract traffic', { error: error.message });
             });
     }
 }
@@ -44,11 +44,10 @@ export const addClientNum = async (name: string | undefined) => {
             }
         })
             .then(function (response: AxiosResponse) {
-                // You can now work with the JSON response data directly
-                console.log(response.data)
+                logger.debug('Client count incremented', { name, response: response.data });
             })
             .catch(function (error: any) {
-                console.error('axios error：', error);
+                logger.error('Failed to increment client count', { error: error.message });
             });
     }
 }
@@ -68,11 +67,10 @@ export const subClientNum = async (name: string | undefined) => {
             }
         })
             .then(function (response: AxiosResponse) {
-                // You can now work with the JSON response data directly
-                console.log(response.data)
+                logger.debug('Client count decremented', { name, response: response.data });
             })
             .catch(function (error: any) {
-                console.error('axios error：', error);
+                logger.error('Failed to decrement client count', { error: error.message });
             });
     }
 }
@@ -96,14 +94,13 @@ export const updateServerInfo = async (name: string | undefined, ip: string | un
             }
         })
             .then(function (response: AxiosResponse) {
-                // You can now work with the JSON response data directly
-                console.log(response.data)
+                logger.info('Server info updated', { name, ip, port });
             })
             .catch(function (error: any) {
-                console.error('axios error：', error);
+                logger.error('Failed to update server info', { error: error.message });
             });
     }
     else {
-        console.log('updateServerInfo error, parameter invalid')
+        logger.warn('updateServerInfo called with invalid parameters', { name, ip, info });
     }
 }
