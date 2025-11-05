@@ -5,6 +5,9 @@ import { fnInitor } from '../../core/function-initializer';
 import { Encryptor } from '../../crypto/encryptor';
 import { getClientConfig } from '../../config';
 import { logger } from '../../utils/logger';
+import { ProtocolTemplate } from '../../core/protocol-templates/base-template';
+import { createTemplate } from '../../core/protocol-templates/template-factory';
+import { selectRandomTemplate } from '../../core/protocol-templates/template-selector';
 
 let client: any;
 let handshakeInterval: NodeJS.Timeout;
@@ -18,6 +21,7 @@ let encryptor: Encryptor;
 let clientID: Buffer; // 16 bytes binary
 let lastReceivedTime: number = 0; // Track last packet from server
 let newServerPort: number; // Store the port of the new server
+let protocolTemplate: ProtocolTemplate; // Protocol template for packet encapsulation
 
 export function startUdpClient(remoteAddress: string, encryptionKey: string): Promise<number> {
   return new Promise<number>((resolve, reject) => {
@@ -41,20 +45,27 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
     const INACTIVITY_TIMEOUT = config.inactivityTimeout;
     const INACTIVITY_CHECK_INTERVAL = 10000; // Check every 10 seconds
     
-    // Function to generate heartbeat with current clientID
+    // Function to generate heartbeat with current clientID and template
     function getHeartbeatData() {
-      return Buffer.concat([
-        clientID,              // 16 bytes (current clientID)
-        Buffer.from([0x01])    // 1 byte marker
-      ]);
+      const heartbeatMarker = Buffer.from([0x01]); // 1 byte marker
+      const packet = protocolTemplate.encapsulate(heartbeatMarker, clientID);
+      protocolTemplate.updateState();
+      return packet;
     }
 
+    // Select random protocol template
+    const templateId = selectRandomTemplate();
+    protocolTemplate = createTemplate(templateId);
+    logger.info(`Selected protocol template: ${protocolTemplate.name} (ID: ${templateId})`);
+    
     let handshakeData = {
       clientID: clientID.toString('base64'), // 16 bytes → 24 char base64
       key: config.obfuscation.key,
       obfuscationLayer: config.obfuscation.layer,
       randomPadding: config.obfuscation.paddingLength,
       fnInitor: fnInitor(),
+      templateId: templateId,
+      templateParams: protocolTemplate.getParams(),
       userId: userId,
       publicKey: 'not implemented',
     };
@@ -121,6 +132,11 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
         logger.info(`Old clientID: ${oldClientID}`);
         logger.info(`New clientID: ${clientID.toString('hex')}`);
         
+        // Select NEW protocol template to evade GFW blocking
+        const newTemplateId = selectRandomTemplate();
+        protocolTemplate = createTemplate(newTemplateId);
+        logger.info(`Old template: ${handshakeData.templateId}, New template: ${protocolTemplate.name} (ID: ${newTemplateId})`);
+        
         // Generate NEW obfuscation parameters to evade GFW blocking
         handshakeData = {
           clientID: clientID.toString('base64'), // NEW clientID
@@ -128,6 +144,8 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
           obfuscationLayer: config.obfuscation.layer,
           randomPadding: config.obfuscation.paddingLength,
           fnInitor: fnInitor(),                  // NEW function initializer
+          templateId: newTemplateId,             // NEW template
+          templateParams: protocolTemplate.getParams(), // NEW template params
           userId: userId,
           publicKey: 'not implemented',
         };
@@ -311,11 +329,11 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
       if (newServerPort) {
         const obfuscatedData = obfuscator.obfuscation(message);
         
-        // Prepend clientID to obfuscated data
-        const packet = Buffer.concat([
-          clientID,                    // 16 bytes
-          Buffer.from(obfuscatedData)  // N bytes
-        ]);
+        // Encapsulate with protocol template
+        const packet = protocolTemplate.encapsulate(Buffer.from(obfuscatedData), clientID);
+        
+        // Update template state (sequence numbers, etc.)
+        protocolTemplate.updateState();
         
         client.send(packet, 0, packet.length, newServerPort, HANDSHAKE_SERVER_ADDRESS, (error: any) => {
           if (error) {

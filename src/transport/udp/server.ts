@@ -5,6 +5,8 @@ import { Encryptor } from '../../crypto/encryptor';
 import { getServerConfig } from '../../config';
 import { logger } from '../../utils/logger';
 import { UserInfo } from '../../types';
+import { ProtocolTemplate } from '../../core/protocol-templates/base-template';
+import { createTemplate } from '../../core/protocol-templates/template-factory';
 
 // //function to record concurrency client and max client
 // let clientStatOperation = function(ins:number) {
@@ -43,6 +45,7 @@ interface ClientSession {
   remotePort: number;
   socket: dgram.Socket;
   obfuscator: Obfuscator;
+  template: ProtocolTemplate;  // Protocol template for packet encapsulation
   userInfo: UserInfo;
   publicKey: string;
   lastSeen: number;
@@ -77,36 +80,40 @@ function handleCloseMessage(remote: any) {
   subClientNum(HOST_NAME);
 }
 
-// Helper function to handle data packets (with clientID prepended)
+// Helper function to handle data packets (with protocol template encapsulation)
 function handleDataPacket(packet: Buffer, remote: any) {
-  // Extract clientID (first 16 bytes)
-  if (packet.length < 16) {
-    logger.warn(`Received invalid packet from ${remote.address}:${remote.port} (too short)`);
-    return;
+  // Try to decapsulate with each active session's template
+  // (We don't know which session this packet belongs to until we decapsulate)
+  let matchedSession: ClientSession | null = null;
+  let clientID: string = '';
+  let obfuscatedData: Buffer | null = null;
+  
+  // Try to find matching session by attempting decapsulation
+  for (const [sessionClientID, session] of activeSessions.entries()) {
+    const result = session.template.decapsulate(packet);
+    if (result && result.clientID.toString('hex') === sessionClientID) {
+      matchedSession = session;
+      clientID = sessionClientID;
+      obfuscatedData = result.data;
+      break;
+    }
   }
   
-  const clientIDBuffer = packet.slice(0, 16);
-  const clientID = clientIDBuffer.toString('hex');
-  
-  const session = activeSessions.get(clientID);
-  if (!session) {
-    logger.warn(`Received packet from unknown clientID: ${clientID}`);
+  if (!matchedSession || !obfuscatedData) {
+    logger.warn(`Received packet from unknown session or invalid template format from ${remote.address}:${remote.port}`);
     return;
   }
   
   // Update IP if changed (IP migration!)
-  if (session.remoteAddress !== remote.address || session.remotePort !== remote.port) {
+  if (matchedSession.remoteAddress !== remote.address || matchedSession.remotePort !== remote.port) {
     logger.info(`IP migration detected for client ${clientID}`);
-    logger.info(`  Old: ${session.remoteAddress}:${session.remotePort}`);
+    logger.info(`  Old: ${matchedSession.remoteAddress}:${matchedSession.remotePort}`);
     logger.info(`  New: ${remote.address}:${remote.port}`);
-    session.remoteAddress = remote.address;
-    session.remotePort = remote.port;
+    matchedSession.remoteAddress = remote.address;
+    matchedSession.remotePort = remote.port;
   }
   
-  session.lastSeen = Date.now();
-  
-  // Extract obfuscated data (skip clientID)
-  const obfuscatedData = packet.slice(16);
+  matchedSession.lastSeen = Date.now();
   
   // Check if heartbeat
   const isHeartbeat = obfuscatedData.length === 1 && obfuscatedData[0] === 0x01;
@@ -117,9 +124,9 @@ function handleDataPacket(packet: Buffer, remote: any) {
   }
   
   // Deobfuscate and forward to WireGuard
-  const deobfuscatedData = session.obfuscator.deobfuscation(obfuscatedData.buffer);
+  const deobfuscatedData = matchedSession.obfuscator.deobfuscation(obfuscatedData.buffer);
   
-  session.socket.send(deobfuscatedData, 0, deobfuscatedData.length, LOCALWG_PORT, LOCALWG_ADDRESS, (error) => {
+  matchedSession.socket.send(deobfuscatedData, 0, deobfuscatedData.length, LOCALWG_PORT, LOCALWG_ADDRESS, (error) => {
     if (error) {
       logger.error(`Failed to send data to WireGuard for client ${clientID}`);
     }
@@ -195,6 +202,7 @@ server.on('message', async (message, remote) => {
     
     logger.info(`ClientID: ${clientID}`);
     logger.info(`UserID: ${handshakeData.userId}`);
+    logger.info(`Template ID: ${handshakeData.templateId}`);
     
     // Check if session already exists (reconnection/IP migration)
     if (activeSessions.has(clientID)) {
@@ -226,7 +234,7 @@ server.on('message', async (message, remote) => {
       });
       return;
     }
-    // New session - create obfuscator and socket
+    // New session - create obfuscator, template, and socket
     logger.info(`Creating new session for clientID ${clientID}`);
     
     const obfuscator = new Obfuscator(
@@ -235,6 +243,10 @@ server.on('message', async (message, remote) => {
       handshakeData.randomPadding,
       handshakeData.fnInitor
     );
+    
+    // Create protocol template from handshake
+    const template = createTemplate(handshakeData.templateId, handshakeData.templateParams);
+    logger.info(`Created template: ${template.name} (ID: ${template.id})`);
     
     const newSocket = dgram.createSocket('udp4');
     
@@ -245,6 +257,7 @@ server.on('message', async (message, remote) => {
       remotePort: remote.port,
       socket: newSocket,
       obfuscator,
+      template,
       userInfo: { userId: handshakeData.userId, traffic: 0 },
       publicKey: handshakeData.publicKey,
       lastSeen: Date.now()
@@ -261,11 +274,11 @@ server.on('message', async (message, remote) => {
         // Obfuscate data from WireGuard
         const obfuscatedData = session.obfuscator.obfuscation(wgMessage);
         
-        // Prepend clientID
-        const packet = Buffer.concat([
-          clientIDBuffer,              // 16 bytes
-          Buffer.from(obfuscatedData)  // N bytes
-        ]);
+        // Encapsulate with protocol template
+        const packet = session.template.encapsulate(Buffer.from(obfuscatedData), clientIDBuffer);
+        
+        // Update template state
+        session.template.updateState();
         
         // Send to client
         newSocket.send(packet, 0, packet.length, session.remotePort, session.remoteAddress, (error) => {
@@ -278,24 +291,26 @@ server.on('message', async (message, remote) => {
         session.userInfo.traffic += packet.length;
         session.lastSeen = Date.now();
       } else {
-        // Data from client (with clientID prepended)
-        if (wgMessage.length < 16) return; // Invalid packet
-        
-        const receivedClientIDBuffer = wgMessage.slice(0, 16);
-        const receivedClientID = receivedClientIDBuffer.toString('hex');
-        
-        if (receivedClientID !== clientID) {
-          logger.warn(`ClientID mismatch: expected ${clientID}, got ${receivedClientID}`);
-          return;
-        }
-        
+        // Data from client (with protocol template encapsulation)
         const session = activeSessions.get(clientID);
         if (!session) return;
         
-        // Extract obfuscated data (skip clientID)
-        const obfuscatedData = wgMessage.slice(16);
+        // Decapsulate with protocol template
+        const result = session.template.decapsulate(wgMessage);
+        if (!result) {
+          logger.warn(`Failed to decapsulate packet from client ${clientID}`);
+          return;
+        }
         
-        // Check if heartbeat (1 byte = 0x01 after clientID)
+        // Verify clientID matches
+        if (result.clientID.toString('hex') !== clientID) {
+          logger.warn(`ClientID mismatch: expected ${clientID}, got ${result.clientID.toString('hex')}`);
+          return;
+        }
+        
+        const obfuscatedData = result.data;
+        
+        // Check if heartbeat (1 byte = 0x01)
         const isHeartbeat = obfuscatedData.length === 1 && obfuscatedData[0] === 0x01;
         
         // Update last seen
