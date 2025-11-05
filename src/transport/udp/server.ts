@@ -1,4 +1,5 @@
 import * as dgram from 'dgram';
+import * as crypto from 'crypto';
 import { Obfuscator } from '../../core/obfuscator';
 import { subTraffic, subClientNum, addClientNum, updateServerInfo } from '../../api/client';
 import { Encryptor } from '../../crypto/encryptor';
@@ -7,6 +8,8 @@ import { logger } from '../../utils/logger';
 import { UserInfo } from '../../types';
 import { ProtocolTemplate } from '../../core/protocol-templates/base-template';
 import { createTemplate } from '../../core/protocol-templates/template-factory';
+import { deriveSessionKeys, decapsulateSecure, encapsulateSecure, SessionKeys } from '../../core/packet-security';
+import { RateLimiter } from '../../core/rate-limiter';
 
 // //function to record concurrency client and max client
 // let clientStatOperation = function(ins:number) {
@@ -38,6 +41,11 @@ const encryptionInfo = `${encryptor.simpleKey.toString('base64')}:${encryptor.si
 logger.info(`Encryption info: ${encryptionInfo}`);
 updateServerInfo(HOST_NAME, HOST_IP, PORT, encryptionInfo);
 
+// Rate limiters
+const handshakeRateLimiter = new RateLimiter(10, 60000); // 10 handshakes per minute per IP
+const packetRateLimiter = new RateLimiter(1000, 1000);   // 1000 packets per second per IP
+logger.info('Rate limiters initialized');
+
 // Client session structure
 interface ClientSession {
   clientID: string;           // hex string (32 chars)
@@ -46,6 +54,9 @@ interface ClientSession {
   socket: dgram.Socket;
   obfuscator: Obfuscator;
   template: ProtocolTemplate;  // Protocol template for packet encapsulation
+  sessionKeys?: SessionKeys;   // Session keys for packet security
+  lastSequence: number;        // Last valid sequence number (replay protection)
+  packetSequence: number;      // Server's packet sequence number
   userInfo: UserInfo;
   publicKey: string;
   lastSeen: number;
@@ -80,7 +91,7 @@ function handleCloseMessage(remote: any) {
   subClientNum(HOST_NAME);
 }
 
-// Helper function to handle data packets (with protocol template encapsulation)
+// Helper function to handle data packets (with protocol template encapsulation and security)
 function handleDataPacket(packet: Buffer, remote: any) {
   // Try to decapsulate with each active session's template
   // (We don't know which session this packet belongs to until we decapsulate)
@@ -90,7 +101,29 @@ function handleDataPacket(packet: Buffer, remote: any) {
   
   // Try to find matching session by attempting decapsulation
   for (const [sessionClientID, session] of activeSessions.entries()) {
-    const result = session.template.decapsulate(packet);
+    let packetToDecapsulate = packet;
+    
+    // If session has security enabled, decapsulate security layer first
+    if (session.sessionKeys) {
+      const secureResult = decapsulateSecure(packet, session.sessionKeys.sessionKey, session.sessionKeys.hmacKey, session.lastSequence);
+      if (!secureResult) {
+        continue; // Security validation failed, try next session
+      }
+      
+      // Update last sequence
+      session.lastSequence = secureResult.sequence;
+      
+      // Verify clientID matches
+      if (secureResult.clientID.toString('hex') !== sessionClientID) {
+        logger.warn(`ClientID mismatch in secure packet: expected ${sessionClientID}, got ${secureResult.clientID.toString('hex')}`);
+        continue;
+      }
+      
+      packetToDecapsulate = secureResult.data;
+    }
+    
+    // Decapsulate template layer
+    const result = session.template.decapsulate(packetToDecapsulate);
     if (result && result.clientID.toString('hex') === sessionClientID) {
       matchedSession = session;
       clientID = sessionClientID;
@@ -100,7 +133,7 @@ function handleDataPacket(packet: Buffer, remote: any) {
   }
   
   if (!matchedSession || !obfuscatedData) {
-    logger.warn(`Received packet from unknown session or invalid template format from ${remote.address}:${remote.port}`);
+    logger.warn(`Received packet from unknown session or invalid format from ${remote.address}:${remote.port}`);
     return;
   }
   
@@ -175,6 +208,12 @@ const trafficInterval = setInterval(() => {
 }, TRAFFIC_INTERVAL);
 // Handle incoming messages
 server.on('message', async (message, remote) => {
+  // Rate limit check for all packets
+  if (!packetRateLimiter.isAllowed(remote.address)) {
+    logger.warn(`Packet rate limit exceeded for ${remote.address}`);
+    return;
+  }
+  
   try {
     // Try to decrypt as control message (handshake or close)
     let decryptedMessage: Buffer;
@@ -194,6 +233,12 @@ server.on('message', async (message, remote) => {
     
     // Handle handshake
     logger.info(`Received handshake from ${remote.address}:${remote.port}`);
+    
+    // Rate limit check for handshakes
+    if (!handshakeRateLimiter.isAllowed(remote.address)) {
+      logger.warn(`Handshake rate limit exceeded for ${remote.address}`);
+      return;
+    }
     // Parse handshake data
     const handshakeData = JSON.parse(decryptedMessage.toString());
     const clientIDBase64 = handshakeData.clientID;
@@ -248,6 +293,13 @@ server.on('message', async (message, remote) => {
     const template = createTemplate(handshakeData.templateId, handshakeData.templateParams);
     logger.info(`Created template: ${template.name} (ID: ${template.id})`);
     
+    // Generate session salt and derive keys for packet security
+    const sessionSalt = crypto.randomBytes(32);
+    const sharedSecret = Buffer.from(handshakeData.key.toString());
+    const sessionKeys = deriveSessionKeys(sharedSecret, sessionSalt);
+    const serverNonce = Math.floor(Math.random() * 0xFFFFFFFF);
+    logger.info('Session keys derived, packet security enabled');
+    
     const newSocket = dgram.createSocket('udp4');
     
     // Create session
@@ -258,6 +310,9 @@ server.on('message', async (message, remote) => {
       socket: newSocket,
       obfuscator,
       template,
+      sessionKeys,
+      lastSequence: serverNonce,
+      packetSequence: serverNonce,
       userInfo: { userId: handshakeData.userId, traffic: 0 },
       publicKey: handshakeData.publicKey,
       lastSeen: Date.now()
@@ -275,7 +330,12 @@ server.on('message', async (message, remote) => {
         const obfuscatedData = session.obfuscator.obfuscation(wgMessage);
         
         // Encapsulate with protocol template
-        const packet = session.template.encapsulate(Buffer.from(obfuscatedData), clientIDBuffer);
+        let packet = session.template.encapsulate(Buffer.from(obfuscatedData), clientIDBuffer);
+        
+        // Add security layer if session keys available
+        if (session.sessionKeys) {
+          packet = encapsulateSecure(clientIDBuffer, packet, session.packetSequence++, session.sessionKeys.sessionKey, session.sessionKeys.hmacKey);
+        }
         
         // Update template state
         session.template.updateState();
@@ -291,12 +351,34 @@ server.on('message', async (message, remote) => {
         session.userInfo.traffic += packet.length;
         session.lastSeen = Date.now();
       } else {
-        // Data from client (with protocol template encapsulation)
+        // Data from client (with protocol template encapsulation and security)
         const session = activeSessions.get(clientID);
         if (!session) return;
         
+        let packetToDecapsulate = wgMessage;
+        
+        // If session has security enabled, decapsulate security layer first
+        if (session.sessionKeys) {
+          const secureResult = decapsulateSecure(wgMessage, session.sessionKeys.sessionKey, session.sessionKeys.hmacKey, session.lastSequence);
+          if (!secureResult) {
+            logger.warn(`Security validation failed for packet from client ${clientID}`);
+            return;
+          }
+          
+          // Update last sequence
+          session.lastSequence = secureResult.sequence;
+          
+          // Verify clientID matches
+          if (secureResult.clientID.toString('hex') !== clientID) {
+            logger.warn(`ClientID mismatch in secure packet: expected ${clientID}, got ${secureResult.clientID.toString('hex')}`);
+            return;
+          }
+          
+          packetToDecapsulate = secureResult.data;
+        }
+        
         // Decapsulate with protocol template
-        const result = session.template.decapsulate(wgMessage);
+        const result = session.template.decapsulate(packetToDecapsulate);
         if (!result) {
           logger.warn(`Failed to decapsulate packet from client ${clientID}`);
           return;
@@ -339,11 +421,13 @@ server.on('message', async (message, remote) => {
       const newPort = newSocket.address().port;
       logger.info(`New session socket listening on port ${newPort} for clientID ${clientID}`);
 
-      // Send response with port and clientID confirmation
+      // Send response with port, clientID confirmation, and security parameters
       const response = {
         port: newPort,
         clientID: clientIDBase64,
-        status: 'connected'
+        status: 'connected',
+        sessionSalt: sessionSalt.toString('base64'),
+        serverNonce: serverNonce
       };
       
       server.send(responseEncrypted, 0, responseEncrypted.length, remote.port, remote.address, (error) => {
