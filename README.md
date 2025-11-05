@@ -60,11 +60,13 @@ npm run server
 Connect to a server:
 
 ```bash
-npm run client <server_ip>:<port>:<user_id>
+npm run client <server_ip>:<port>:<user_id> <encryption_key>
 
 # Example
-npm run client 192.168.1.100:12301:user123
+npm run client 192.168.1.100:12301:user123 "base64key:base64iv"
 ```
+
+**Note**: The encryption key is displayed by the server on startup and should be obtained from the server logs.
 
 ## Development
 
