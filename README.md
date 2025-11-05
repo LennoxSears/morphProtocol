@@ -7,9 +7,10 @@ A sophisticated network traffic obfuscation system designed to disguise and encr
 - **Multi-layer Obfuscation**: Apply 1-4 layers of cryptographic transformations
 - **Dynamic Function Selection**: Unpredictable transformation patterns per packet
 - **UDP Transport**: Fast, low-latency packet forwarding
+- **IP Migration**: QUIC-style seamless IP address changes without reconnection
 - **AES-256-CBC Encryption**: Strong encryption with RSA key exchange
 - **Traffic Management**: Built-in bandwidth tracking and reporting
-- **Auto-reconnection**: Resilient client with automatic retry logic
+- **Session Persistence**: ClientID-based sessions survive network changes
 
 ## Architecture
 

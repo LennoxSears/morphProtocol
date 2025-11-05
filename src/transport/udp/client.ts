@@ -1,4 +1,5 @@
 import * as dgram from 'dgram';
+import * as crypto from 'crypto';
 import { Obfuscator } from '../../core/obfuscator';
 import { fnInitor } from '../../core/function-initializer';
 import { Encryptor } from '../../crypto/encryptor';
@@ -13,6 +14,7 @@ let HANDSHAKE_SERVER_ADDRESS: string;
 let HANDSHAKE_SERVER_PORT: number;
 let userId: string;
 let encryptor: Encryptor;
+let clientID: Buffer; // 16 bytes binary
 
 export function startUdpClient(remoteAddress: string, encryptionKey: string): Promise<number> {
   return new Promise<number>((resolve, reject) => {
@@ -22,6 +24,10 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
     HANDSHAKE_SERVER_PORT = config.remotePort;
     userId = config.userId;
     
+    // Generate 16-byte clientID (per process, ephemeral)
+    clientID = crypto.randomBytes(16);
+    logger.info(`Generated clientID: ${clientID.toString('hex')}`);
+    
     // Initialize encryptor with password from config
     encryptor = new Encryptor(process.env.PASSWORD || 'bumoyu123');
     encryptor.setSimple(encryptionKey);
@@ -29,9 +35,15 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
     const LOCALWG_PORT = config.localWgPort;
     const MAX_RETRIES = config.maxRetries;
     const HEARTBEAT_INTERVAL = config.heartbeatInterval;
-    const heartbeatData = Buffer.from([0x01]);
+    
+    // Heartbeat with clientID prepended
+    const heartbeatData = Buffer.concat([
+      clientID,              // 16 bytes
+      Buffer.from([0x01])    // 1 byte marker
+    ]);
 
     const handshakeData = {
+      clientID: clientID.toString('base64'), // 16 bytes → 24 char base64
       key: config.obfuscation.key,
       obfuscationLayer: config.obfuscation.layer,
       randomPadding: config.obfuscation.paddingLength,
@@ -136,27 +148,65 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
           client.close()
           reject("server_full")
         }
-        else if (!isNaN(parseInt(message.toString(), 10))) {
-          newServerPort = parseInt(message.toString(), 10);
-          logger.info(`Received new server port from handshake server: ${newServerPort}`);
-          // Stop sending handshake data and start communication with the new UDP server
-          if (handshakeInterval) {
-            clearInterval(handshakeInterval);
-          }
-          heartBeatInterval = setInterval(() => {
-            client.send(heartbeatData, 0, heartbeatData.length, newServerPort, HANDSHAKE_SERVER_ADDRESS, (error: any) => {
-              if (error) {
-                logger.error('Failed to send data to new server:', error);
-              } else {
-                logger.info('heartBeat sent to new server');
-              }
-            })
-          }, HEARTBEAT_INTERVAL)
-          // Resolve the promise with the client port once everything is set up
-          resolve(clientPort);
-        }
         else {
-          logger.error('Invalid new server port received:', message.toString());
+          // Try to parse as JSON response with port and clientID
+          try {
+            const response = JSON.parse(message.toString());
+            if (response.port && response.clientID) {
+              newServerPort = response.port;
+              const confirmedClientID = response.clientID;
+              
+              logger.info(`Received server response:`);
+              logger.info(`  Port: ${newServerPort}`);
+              logger.info(`  ClientID confirmed: ${confirmedClientID}`);
+              
+              // Verify clientID matches
+              if (confirmedClientID !== clientID.toString('base64')) {
+                logger.warn('ClientID mismatch! Server returned different clientID');
+              }
+              
+              // Stop sending handshake data and start heartbeat
+              if (handshakeInterval) {
+                clearInterval(handshakeInterval);
+              }
+              
+              heartBeatInterval = setInterval(() => {
+                client.send(heartbeatData, 0, heartbeatData.length, newServerPort, HANDSHAKE_SERVER_ADDRESS, (error: any) => {
+                  if (error) {
+                    logger.error('Failed to send heartbeat to new server:', error);
+                  } else {
+                    logger.debug('Heartbeat sent to new server');
+                  }
+                })
+              }, HEARTBEAT_INTERVAL);
+              
+              resolve(clientPort);
+            } else if (!isNaN(parseInt(message.toString(), 10))) {
+              // Fallback: old format (just port number)
+              newServerPort = parseInt(message.toString(), 10);
+              logger.info(`Received new server port (legacy format): ${newServerPort}`);
+              
+              if (handshakeInterval) {
+                clearInterval(handshakeInterval);
+              }
+              
+              heartBeatInterval = setInterval(() => {
+                client.send(heartbeatData, 0, heartbeatData.length, newServerPort, HANDSHAKE_SERVER_ADDRESS, (error: any) => {
+                  if (error) {
+                    logger.error('Failed to send heartbeat to new server:', error);
+                  } else {
+                    logger.debug('Heartbeat sent to new server');
+                  }
+                })
+              }, HEARTBEAT_INTERVAL);
+              
+              resolve(clientPort);
+            } else {
+              logger.error('Invalid server response:', message.toString());
+            }
+          } catch (e) {
+            logger.error('Failed to parse server response:', message.toString());
+          }
         }
 
       } else if (remote.port === LOCALWG_PORT) {
@@ -176,8 +226,14 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
     function sendToNewServer(message: ArrayBuffer) {
       if (newServerPort) {
         const obfuscatedData = obfuscator.obfuscation(message);
-        //logger.info(HANDSHAKE_SERVER_ADDRESS + ":" + newServerPort);
-        client.send(obfuscatedData, 0, obfuscatedData.length, newServerPort, HANDSHAKE_SERVER_ADDRESS, (error: any) => {
+        
+        // Prepend clientID to obfuscated data
+        const packet = Buffer.concat([
+          clientID,                    // 16 bytes
+          Buffer.from(obfuscatedData)  // N bytes
+        ]);
+        
+        client.send(packet, 0, packet.length, newServerPort, HANDSHAKE_SERVER_ADDRESS, (error: any) => {
           if (error) {
             logger.error('Failed to send data to new server:', error);
           } else {

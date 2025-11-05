@@ -36,204 +36,318 @@ const encryptionInfo = `${encryptor.simpleKey.toString('base64')}:${encryptor.si
 logger.info(`Encryption info: ${encryptionInfo}`);
 updateServerInfo(HOST_NAME, HOST_IP, PORT, encryptionInfo);
 
-// Map to store the last received message timestamp for each remote address
-const lastMessageTimestamps: Map<string, number> = new Map();
+// Client session structure
+interface ClientSession {
+  clientID: string;           // hex string (32 chars)
+  remoteAddress: string;
+  remotePort: number;
+  socket: dgram.Socket;
+  obfuscator: Obfuscator;
+  userInfo: UserInfo;
+  publicKey: string;
+  lastSeen: number;
+}
 
-// Function to check if the new UDP server should shut down due to inactivity
-function checkInactivityTimeout(udpID: string) {
-  const lastMessageTimestamp = lastMessageTimestamps.get(udpID);
-  if (lastMessageTimestamp) {
-    const currentTime = Date.now();
-    if (currentTime - lastMessageTimestamp >= TIMEOUT_DURATION) {
-      logger.info(`Shutting down UDP server for ${udpID} due to inactivity`);
-      const newServer = activeServers.get(udpID);
-      if (newServer) {
-        let remotePublicKey = activeUserPublicKey.get(udpID)
-        if (!remotePublicKey) {
-          logger.error(`Failed to get public key for ${udpID}`);
-          return -1
-        }
-        let msg = encryptor.simpleEncrypt("inactivity")
-        server.send(msg, 0, msg.length, Number(udpID.split(":")[1]), udpID.split(":")[0], (error) => {
-          if (error) {
-            logger.info(`Failed to send response to ${udpID}`);
-          }
-          else {
-            logger.info(`inactivity sent to ${udpID}`)
-          }
-        });
-        let userId_temp = activeUserInfo.get(udpID)?.userId
-        subTraffic(activeUserInfo.get(udpID)?.userId, activeUserInfo.get(udpID)?.traffic)
-        activeUserInfo.set(udpID, { userId: userId_temp, traffic: 0 })
-        newServer.close();
-        activeServers.delete(udpID);
-        activeObfuscator.delete(udpID);
-        activeUserInfo.delete(udpID);
-        activeUserPublicKey.delete(udpID)
-        subClientNum(HOST_NAME)
-      }
+// Map to store active sessions by clientID
+const activeSessions: Map<string, ClientSession> = new Map();
+
+// Helper function to handle close messages
+function handleCloseMessage(remote: any) {
+  // Find session by IP:port (since close message doesn't have clientID)
+  let foundClientID: string | null = null;
+  for (const [clientID, session] of activeSessions.entries()) {
+    if (session.remoteAddress === remote.address && session.remotePort === remote.port) {
+      foundClientID = clientID;
+      break;
     }
+  }
+  
+  if (!foundClientID) {
+    logger.warn(`Received close from unknown client ${remote.address}:${remote.port}`);
+    return;
+  }
+  
+  const session = activeSessions.get(foundClientID)!;
+  logger.info(`Client ${foundClientID} closing connection`);
+  
+  // Report traffic and cleanup
+  subTraffic(session.userInfo.userId, session.userInfo.traffic);
+  session.socket.close();
+  activeSessions.delete(foundClientID);
+  subClientNum(HOST_NAME);
+}
+
+// Helper function to handle data packets (with clientID prepended)
+function handleDataPacket(packet: Buffer, remote: any) {
+  // Extract clientID (first 16 bytes)
+  if (packet.length < 16) {
+    logger.warn(`Received invalid packet from ${remote.address}:${remote.port} (too short)`);
+    return;
+  }
+  
+  const clientIDBuffer = packet.slice(0, 16);
+  const clientID = clientIDBuffer.toString('hex');
+  
+  const session = activeSessions.get(clientID);
+  if (!session) {
+    logger.warn(`Received packet from unknown clientID: ${clientID}`);
+    return;
+  }
+  
+  // Update IP if changed (IP migration!)
+  if (session.remoteAddress !== remote.address || session.remotePort !== remote.port) {
+    logger.info(`IP migration detected for client ${clientID}`);
+    logger.info(`  Old: ${session.remoteAddress}:${session.remotePort}`);
+    logger.info(`  New: ${remote.address}:${remote.port}`);
+    session.remoteAddress = remote.address;
+    session.remotePort = remote.port;
+  }
+  
+  session.lastSeen = Date.now();
+  
+  // Extract obfuscated data (skip clientID)
+  const obfuscatedData = packet.slice(16);
+  
+  // Check if heartbeat
+  const isHeartbeat = obfuscatedData.length === 1 && obfuscatedData[0] === 0x01;
+  
+  if (isHeartbeat) {
+    logger.debug(`Heartbeat from client ${clientID}`);
+    return;
+  }
+  
+  // Deobfuscate and forward to WireGuard
+  const deobfuscatedData = session.obfuscator.deobfuscation(obfuscatedData.buffer);
+  
+  session.socket.send(deobfuscatedData, 0, deobfuscatedData.length, LOCALWG_PORT, LOCALWG_ADDRESS, (error) => {
+    if (error) {
+      logger.error(`Failed to send data to WireGuard for client ${clientID}`);
+    }
+  });
+  
+  // Update traffic
+  session.userInfo.traffic += packet.length;
+}
+
+// Function to check if session should shut down due to inactivity
+function checkInactivityTimeout(clientID: string) {
+  const session = activeSessions.get(clientID);
+  if (!session) return;
+  
+  const currentTime = Date.now();
+  if (currentTime - session.lastSeen >= TIMEOUT_DURATION) {
+    logger.info(`Shutting down session for clientID ${clientID} due to inactivity`);
+    
+    // Send inactivity message
+    const msg = encryptor.simpleEncrypt("inactivity");
+    server.send(msg, 0, msg.length, session.remotePort, session.remoteAddress, (error) => {
+      if (error) {
+        logger.error(`Failed to send inactivity message to ${clientID}`);
+      } else {
+        logger.info(`Inactivity message sent to ${clientID}`);
+      }
+    });
+    
+    // Report traffic and cleanup
+    subTraffic(session.userInfo.userId, session.userInfo.traffic);
+    session.socket.close();
+    activeSessions.delete(clientID);
+    subClientNum(HOST_NAME);
   }
 }
 
-const activeServers: Map<string, dgram.Socket> = new Map();
-const activeObfuscator: Map<string, Obfuscator> = new Map();
-const activeUserInfo: Map<string, UserInfo> = new Map();
-const activeUserPublicKey: Map<string, string> = new Map();
+// Traffic reporting interval
 const trafficInterval = setInterval(() => {
-  logger.info('Updating traffic for all active users');
-  activeUserInfo.forEach((value, key) => {
-    subTraffic(value.userId, value.traffic);
-    value.traffic = 0;
+  logger.info('Updating traffic for all active sessions');
+  activeSessions.forEach((session, clientID) => {
+    if (session.userInfo.traffic > 0) {
+      subTraffic(session.userInfo.userId, session.userInfo.traffic);
+      session.userInfo.traffic = 0;
+    }
   });
 }, TRAFFIC_INTERVAL);
 // Handle incoming messages
 server.on('message', async (message, remote) => {
   try {
-    logger.info(message.toString())
-    message = await Buffer.from(encryptor.simpleDecrypt(message.toString()))
-    logger.info(message.toString())
-    if (message.toString() === 'close') {
-      let userId_temp = activeUserInfo.get(`${remote.address}:${remote.port}`)?.userId
-      subTraffic(activeUserInfo.get(`${remote.address}:${remote.port}`)?.userId, activeUserInfo.get(`${remote.address}:${remote.port}`)?.traffic)
-      activeUserInfo.set(`${remote.address}:${remote.port}`, { userId: userId_temp, traffic: 0 })
-      activeServers.get(`${remote.address}:${remote.port}`)?.close()
-      activeServers.delete(`${remote.address}:${remote.port}`);
-      activeObfuscator.delete(`${remote.address}:${remote.port}`);
-      activeUserInfo.delete(`${remote.address}:${remote.port}`)
-      activeUserPublicKey.delete(`${remote.address}:${remote.port}`)
-      subClientNum(HOST_NAME)
-      return
+    // Try to decrypt as control message (handshake or close)
+    let decryptedMessage: Buffer;
+    try {
+      decryptedMessage = Buffer.from(encryptor.simpleDecrypt(message.toString()));
+    } catch (e) {
+      // Not a control message, must be data packet with clientID
+      handleDataPacket(message, remote);
+      return;
     }
-    logger.info(`Received handshake data from ${remote.address}:${remote.port}`);
-    if (activeServers.get(`${remote.address}:${remote.port}`)) {
-      let remotePublicKey = activeUserPublicKey.get(`${remote.address}:${remote.port}`)
-      let responsePort = activeServers.get(`${remote.address}:${remote.port}`)?.address().port
-      if (!remotePublicKey || !responsePort) {
-        logger.error(`Failed to get public key or port for ${remote.address}:${remote.port}`);
-        return -1
-      }
-      let response = encryptor.simpleEncrypt(`${responsePort}`)
-      if (response && response.toString()) {
-        server.send(response.toString(), 0, response.toString().length, remote.port, remote.address, (error) => {
-          if (error) {
-            logger.error(`Failed to send response to ${remote.address}:${remote.port}`);
-          } else {
-            logger.info(`Response sent to ${remote.address}:${remote.port}`);
-          }
-        });
-      }
-      return
+    
+    // Handle close message
+    if (decryptedMessage.toString() === 'close') {
+      handleCloseMessage(remote);
+      return;
     }
-    // let cStat = await clientStatOperation(0)
-    // if (cStat.current >= cStat.max) {
-    //   let msg = "server_full"
-    //   server.send(msg, 0, msg.length, remote.port, remote.address, (error) => {
-    //     if (error) {
-    //       logger.error(`Failed to send response to ${remote.address}:${remote.port}`);
-    //     } else {
-    //       logger.info(`server_full sent to ${remote.address}:${remote.port}`);
-    //     }
-    //   });
-    //   return
-    // }
-    // Parse the incoming message as JSON
-    const handshakeData = JSON.parse(message.toString());
-    logger.info("userId: " + handshakeData.userId)
-    // Perform initialization work with the received data
-    // Create an instance of the Obfuscator class
+    
+    // Handle handshake
+    logger.info(`Received handshake from ${remote.address}:${remote.port}`);
+    // Parse handshake data
+    const handshakeData = JSON.parse(decryptedMessage.toString());
+    const clientIDBase64 = handshakeData.clientID;
+    const clientIDBuffer = Buffer.from(clientIDBase64, 'base64');
+    const clientID = clientIDBuffer.toString('hex'); // Use hex as Map key
+    
+    logger.info(`ClientID: ${clientID}`);
+    logger.info(`UserID: ${handshakeData.userId}`);
+    
+    // Check if session already exists (reconnection/IP migration)
+    if (activeSessions.has(clientID)) {
+      const session = activeSessions.get(clientID)!;
+      logger.info(`Client ${clientID} reconnecting`);
+      logger.info(`  Old IP: ${session.remoteAddress}:${session.remotePort}`);
+      logger.info(`  New IP: ${remote.address}:${remote.port}`);
+      
+      // Update IP and port
+      session.remoteAddress = remote.address;
+      session.remotePort = remote.port;
+      session.lastSeen = Date.now();
+      
+      // Send existing port back
+      const responsePort = session.socket.address().port;
+      const response = {
+        port: responsePort,
+        clientID: clientIDBase64,
+        status: 'reconnected'
+      };
+      const responseEncrypted = encryptor.simpleEncrypt(JSON.stringify(response));
+      
+      server.send(responseEncrypted, 0, responseEncrypted.length, remote.port, remote.address, (error) => {
+        if (error) {
+          logger.error(`Failed to send reconnection response to ${clientID}`);
+        } else {
+          logger.info(`Reconnection response sent to ${clientID}`);
+        }
+      });
+      return;
+    }
+    // New session - create obfuscator and socket
+    logger.info(`Creating new session for clientID ${clientID}`);
+    
     const obfuscator = new Obfuscator(
       handshakeData.key,
       handshakeData.obfuscationLayer,
       handshakeData.randomPadding,
       handshakeData.fnInitor
     );
-    // Add the new server to the active servers map
-    activeObfuscator.set(`${remote.address}:${remote.port}`, obfuscator);
-    activeUserInfo.set(`${remote.address}:${remote.port}`, { userId: handshakeData.userId, traffic: 0 })
-    activeUserPublicKey.set(`${remote.address}:${remote.port}`, Buffer.from(handshakeData.publicKey, 'base64').toString())
-    // Create a new UDP server
-    const newServer = dgram.createSocket('udp4');
-
-    // Add the new server to the active servers map
-    activeServers.set(`${remote.address}:${remote.port}`, newServer);
-    addClientNum(HOST_NAME)
-    lastMessageTimestamps.set(`${remote.address}:${remote.port}`, Date.now());
-    // Handle messages on the new server
-    let newPort: number
-    let newAddr: string
-    newServer.on('message', (newMessage, newRemote) => {
-      if (newRemote.address == LOCALWG_ADDRESS) {
-        const data = activeObfuscator.get(`${remote.address}:${remote.port}`)?.obfuscation(newMessage)
-        if (data) {
-          newServer.send(data, 0, data.length, newPort, newAddr, (error) => {
+    
+    const newSocket = dgram.createSocket('udp4');
+    
+    // Create session
+    const session: ClientSession = {
+      clientID,
+      remoteAddress: remote.address,
+      remotePort: remote.port,
+      socket: newSocket,
+      obfuscator,
+      userInfo: { userId: handshakeData.userId, traffic: 0 },
+      publicKey: handshakeData.publicKey,
+      lastSeen: Date.now()
+    };
+    
+    activeSessions.set(clientID, session);
+    addClientNum(HOST_NAME);
+    // Handle messages from WireGuard
+    newSocket.on('message', (wgMessage, wgRemote) => {
+      if (wgRemote.address === LOCALWG_ADDRESS) {
+        const session = activeSessions.get(clientID);
+        if (!session) return;
+        
+        // Obfuscate data from WireGuard
+        const obfuscatedData = session.obfuscator.obfuscation(wgMessage);
+        
+        // Prepend clientID
+        const packet = Buffer.concat([
+          clientIDBuffer,              // 16 bytes
+          Buffer.from(obfuscatedData)  // N bytes
+        ]);
+        
+        // Send to client
+        newSocket.send(packet, 0, packet.length, session.remotePort, session.remoteAddress, (error) => {
+          if (error) {
+            logger.error(`Failed to send data to client ${clientID}`);
+          }
+        });
+        
+        // Update traffic
+        session.userInfo.traffic += packet.length;
+        session.lastSeen = Date.now();
+      } else {
+        // Data from client (with clientID prepended)
+        if (wgMessage.length < 16) return; // Invalid packet
+        
+        const receivedClientIDBuffer = wgMessage.slice(0, 16);
+        const receivedClientID = receivedClientIDBuffer.toString('hex');
+        
+        if (receivedClientID !== clientID) {
+          logger.warn(`ClientID mismatch: expected ${clientID}, got ${receivedClientID}`);
+          return;
+        }
+        
+        const session = activeSessions.get(clientID);
+        if (!session) return;
+        
+        // Extract obfuscated data (skip clientID)
+        const obfuscatedData = wgMessage.slice(16);
+        
+        // Check if heartbeat (1 byte = 0x01 after clientID)
+        const isHeartbeat = obfuscatedData.length === 1 && obfuscatedData[0] === 0x01;
+        
+        // Update last seen
+        session.lastSeen = Date.now();
+        
+        if (!isHeartbeat) {
+          // Deobfuscate and forward to WireGuard
+          const deobfuscatedData = session.obfuscator.deobfuscation(obfuscatedData.buffer);
+          
+          newSocket.send(deobfuscatedData, 0, deobfuscatedData.length, LOCALWG_PORT, LOCALWG_ADDRESS, (error) => {
             if (error) {
-              logger.error(`Failed to send response to ${remote.address}:${remote.port}`);
-            } else {
-              //logger.info(`Data sent to ${remote.address}:${remote.port}`);
+              logger.error(`Failed to send data to WireGuard for client ${clientID}`);
             }
           });
-          let userInfo = activeUserInfo.get(`${remote.address}:${remote.port}`);
-          if (userInfo) {
-            userInfo.traffic += data.length;
-          }
+          
+          // Update traffic
+          session.userInfo.traffic += wgMessage.length;
+        } else {
+          logger.debug(`Heartbeat received from client ${clientID}`);
         }
       }
-      else {
-        newPort = newRemote.port
-        newAddr = newRemote.address
-        const isHeartbeat = newMessage.length === 1 && newMessage[0] === 0x01;
-        // Update the last received message timestamp for the remote address
-        lastMessageTimestamps.set(`${remote.address}:${remote.port}`, Date.now());
-        if (!isHeartbeat) {
-          //logger.info("obfuscated recieved: " + new Uint8Array(newMessage) + "\n")
-          const data = activeObfuscator.get(`${remote.address}:${remote.port}`)?.deobfuscation(newMessage)
-          //logger.info("deobfuscated recieved: " + data)
-          if (data) {
-            newServer.send(data, 0, data.length, LOCALWG_PORT, LOCALWG_ADDRESS, (error) => {
-              if (error) {
-                logger.error(`Failed to send response to ${LOCALWG_ADDRESS}:${LOCALWG_PORT}`);
-              } else {
-                //logger.info(`Data sent to ${LOCALWG_ADDRESS}:${LOCALWG_PORT}`);
-              }
-            });
-          }
-        }
-      }
-      // ...
     });
 
-    // Bind the new server to a random available port
-    newServer.bind(() => {
-      const newPort = newServer.address().port;
-      logger.info(`New UDP server listening on port ${newPort}`);
+    // Bind the socket to a random available port
+    newSocket.bind(() => {
+      const newPort = newSocket.address().port;
+      logger.info(`New session socket listening on port ${newPort} for clientID ${clientID}`);
 
-      // Send the new port back to the remote client
-      let remotePublicKey = activeUserPublicKey.get(`${remote.address}:${remote.port}`)
-      if (!remotePublicKey) {
-        logger.error(`Failed to get public key for ${remote.address}:${remote.port}`);
-        return -1
-      }
-      const responseStr = encryptor.simpleEncrypt(`${newPort}`);
-      const response = Buffer.from(responseStr);
-      server.send(response, 0, response.length, remote.port, remote.address, (error) => {
+      // Send response with port and clientID confirmation
+      const response = {
+        port: newPort,
+        clientID: clientIDBase64,
+        status: 'connected'
+      };
+      
+      server.send(responseEncrypted, 0, responseEncrypted.length, remote.port, remote.address, (error) => {
         if (error) {
-          logger.error(`Failed to send response to ${remote.address}:${remote.port}`);
+          logger.error(`Failed to send response to client ${clientID}`);
         } else {
-          logger.info(`Response sent to ${remote.address}:${remote.port}`);
+          logger.info(`Response sent to client ${clientID} at ${remote.address}:${remote.port}`);
         }
       });
-    });
-
-    // Set a timer to check inactivity timeout
-    const inactivityTimer = setInterval(() => {
-      checkInactivityTimeout(`${remote.address}:${remote.port}`);
-    }, TIMEOUT_DURATION);
-
-    // Cleanup the timer when the new server is closed
-    newServer.on('close', () => {
-      clearInterval(inactivityTimer);
-      //clientStatOperation(-1)
+      
+      // Set up inactivity check timer
+      const inactivityTimer = setInterval(() => {
+        checkInactivityTimeout(clientID);
+      }, TIMEOUT_DURATION);
+      
+      // Cleanup timer when socket closes
+      newSocket.on('close', () => {
+        clearInterval(inactivityTimer);
+      });
     });
     //clientStatOperation(1)
   }
