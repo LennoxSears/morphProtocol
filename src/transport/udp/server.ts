@@ -5,7 +5,7 @@ import { Encryptor } from '../../crypto/encryptor';
 import { getServerConfig } from '../../config';
 import { logger } from '../../utils/logger';
 import { UserInfo } from '../../types';
-import { ProtocolTemplate, extractHeaderIDFromPacket } from '../../core/protocol-templates/base-template';
+import { ProtocolTemplate } from '../../core/protocol-templates/base-template';
 import { createTemplate } from '../../core/protocol-templates/template-factory';
 
 import { RateLimiter } from '../../core/rate-limiter';
@@ -97,88 +97,6 @@ function handleCloseMessage(remote: any) {
   subClientNum(HOST_NAME);
 }
 
-// Helper function to handle data packets (with protocol template encapsulation)
-function handleDataPacket(packet: Buffer, remote: any) {
-  // Extract headerID from packet (protocol-specific)
-  const extracted = extractHeaderIDFromPacket(packet);
-  
-  if (!extracted) {
-    logger.warn(`Failed to extract headerID from ${remote.address}:${remote.port}`);
-    return;
-  }
-  
-  const headerID = extracted.headerID;
-  
-  // Build ipIndex key
-  const ipKey = `${remote.address}:${remote.port}:${headerID.toString('hex')}`;
-  
-  // O(1) lookup in ipIndex
-  let clientID = ipIndex.get(ipKey) || '';
-  
-  // If not found, try to find by headerID alone (IP migration case)
-  if (!clientID) {
-    const headerIDHex = headerID.toString('hex');
-    for (const [cid, sess] of activeSessions.entries()) {
-      if (sess.headerID === headerIDHex) {
-        clientID = cid;
-        logger.info(`IP migration detected for client ${clientID}`);
-        logger.info(`  Old: ${sess.remoteAddress}:${sess.remotePort}`);
-        logger.info(`  New: ${remote.address}:${remote.port}`);
-        
-        // Update ipIndex
-        const oldIpKey = `${sess.remoteAddress}:${sess.remotePort}:${headerIDHex}`;
-        ipIndex.delete(oldIpKey);
-        ipIndex.set(ipKey, clientID);
-        
-        // Update session
-        sess.remoteAddress = remote.address;
-        sess.remotePort = remote.port;
-        break;
-      }
-    }
-  }
-  
-  if (!clientID) {
-    logger.warn(`Received packet from unknown session at ${remote.address}:${remote.port}`);
-    return;
-  }
-  
-  const session = activeSessions.get(clientID);
-  if (!session) {
-    logger.warn(`Session not found for clientID ${clientID}`);
-    return;
-  }
-  
-  session.lastSeen = Date.now();
-  
-  // Decapsulate template layer
-  const obfuscatedData = session.template.decapsulate(packet);
-  if (!obfuscatedData) {
-    logger.warn(`Failed to decapsulate packet from client ${clientID}`);
-    return;
-  }
-  
-  // Check if heartbeat
-  const isHeartbeat = obfuscatedData.length === 1 && obfuscatedData[0] === 0x01;
-  
-  if (isHeartbeat) {
-    logger.debug(`Heartbeat from client ${clientID}`);
-    return;
-  }
-  
-  // Deobfuscate and forward to WireGuard
-  const deobfuscatedData = session.obfuscator.deobfuscation(Buffer.from(obfuscatedData).buffer);
-  
-  session.socket.send(deobfuscatedData, 0, deobfuscatedData.length, LOCALWG_PORT, LOCALWG_ADDRESS, (error) => {
-    if (error) {
-      logger.error(`Failed to send data to WireGuard for client ${clientID}`);
-    }
-  });
-  
-  // Update traffic
-  session.userInfo.traffic += packet.length;
-}
-
 // Function to shut down inactive session
 function shutdownInactiveSession(clientID: string) {
   const session = activeSessions.get(clientID);
@@ -243,8 +161,8 @@ server.on('message', async (message, remote) => {
     try {
       decryptedMessage = Buffer.from(encryptor.simpleDecrypt(message.toString()));
     } catch (e) {
-      // Not a control message, must be data packet with clientID
-      handleDataPacket(message, remote);
+      // Not a control message - ignore (data packets go to per-session sockets)
+      logger.debug(`Received non-control message on main server port from ${remote.address}:${remote.port}`);
       return;
     }
     
