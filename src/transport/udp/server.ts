@@ -6,7 +6,7 @@ import { Encryptor } from '../../crypto/encryptor';
 import { getServerConfig } from '../../config';
 import { logger } from '../../utils/logger';
 import { UserInfo } from '../../types';
-import { ProtocolTemplate } from '../../core/protocol-templates/base-template';
+import { ProtocolTemplate, extractClientID } from '../../core/protocol-templates/base-template';
 import { createTemplate } from '../../core/protocol-templates/template-factory';
 import { deriveSessionKeys, decapsulateSecure, encapsulateSecure, SessionKeys } from '../../core/packet-security';
 import { RateLimiter } from '../../core/rate-limiter';
@@ -93,60 +93,77 @@ function handleCloseMessage(remote: any) {
 
 // Helper function to handle data packets (with protocol template encapsulation and security)
 function handleDataPacket(packet: Buffer, remote: any) {
-  // Try to decapsulate with each active session's template
-  // (We don't know which session this packet belongs to until we decapsulate)
-  let matchedSession: ClientSession | null = null;
-  let clientID: string = '';
-  let obfuscatedData: Buffer | null = null;
+  // Extract clientID from first 16 bytes (O(1) operation)
+  let packetToProcess = packet;
+  let clientIDBuffer: Buffer;
   
-  // Try to find matching session by attempting decapsulation
-  for (const [sessionClientID, session] of activeSessions.entries()) {
-    let packetToDecapsulate = packet;
-    
-    // If session has security enabled, decapsulate security layer first
-    if (session.sessionKeys) {
-      const secureResult = decapsulateSecure(packet, session.sessionKeys.sessionKey, session.sessionKeys.hmacKey, session.lastSequence);
-      if (!secureResult) {
-        continue; // Security validation failed, try next session
+  // Check if packet has security layer
+  // Security layer format: [encryptedClientID: 16][seq: 4][ts: 4][hmac: 32][data]
+  // We need to try decapsulating security first to get the real clientID
+  
+  // Try to extract clientID - could be encrypted or plaintext
+  if (packet.length < 16) {
+    logger.warn(`Packet too short from ${remote.address}:${remote.port}`);
+    return;
+  }
+  
+  // First, try to extract encrypted clientID and find session
+  // We'll try both encrypted and plaintext clientID extraction
+  let session: ClientSession | null = null;
+  let clientID: string = '';
+  
+  // Strategy: Try all active sessions' security keys to decrypt clientID
+  // This is still O(n) but only for the 16-byte clientID decryption, not full packet
+  for (const [sessionClientID, sess] of activeSessions.entries()) {
+    if (sess.sessionKeys) {
+      // Try to decapsulate secure packet
+      const secureResult = decapsulateSecure(packet, sess.sessionKeys.sessionKey, sess.sessionKeys.hmacKey, sess.lastSequence);
+      if (secureResult && secureResult.clientID.toString('hex') === sessionClientID) {
+        session = sess;
+        clientID = sessionClientID;
+        clientIDBuffer = secureResult.clientID;
+        packetToProcess = secureResult.data;
+        session.lastSequence = secureResult.sequence;
+        break;
       }
-      
-      // Update last sequence
-      session.lastSequence = secureResult.sequence;
-      
-      // Verify clientID matches
-      if (secureResult.clientID.toString('hex') !== sessionClientID) {
-        logger.warn(`ClientID mismatch in secure packet: expected ${sessionClientID}, got ${secureResult.clientID.toString('hex')}`);
-        continue;
-      }
-      
-      packetToDecapsulate = secureResult.data;
-    }
-    
-    // Decapsulate template layer
-    const result = session.template.decapsulate(packetToDecapsulate);
-    if (result && result.clientID.toString('hex') === sessionClientID) {
-      matchedSession = session;
-      clientID = sessionClientID;
-      obfuscatedData = result.data;
-      break;
     }
   }
   
-  if (!matchedSession || !obfuscatedData) {
-    logger.warn(`Received packet from unknown session or invalid format from ${remote.address}:${remote.port}`);
+  // If no secure match, try plaintext clientID extraction
+  if (!session) {
+    clientIDBuffer = extractClientID(packet);
+    if (!clientIDBuffer) {
+      logger.warn(`Failed to extract clientID from ${remote.address}:${remote.port}`);
+      return;
+    }
+    
+    clientID = clientIDBuffer.toString('hex');
+    session = activeSessions.get(clientID) || null;
+    packetToProcess = packet;
+  }
+  
+  if (!session) {
+    logger.warn(`Received packet from unknown session ${clientID} at ${remote.address}:${remote.port}`);
     return;
   }
   
   // Update IP if changed (IP migration!)
-  if (matchedSession.remoteAddress !== remote.address || matchedSession.remotePort !== remote.port) {
+  if (session.remoteAddress !== remote.address || session.remotePort !== remote.port) {
     logger.info(`IP migration detected for client ${clientID}`);
-    logger.info(`  Old: ${matchedSession.remoteAddress}:${matchedSession.remotePort}`);
+    logger.info(`  Old: ${session.remoteAddress}:${session.remotePort}`);
     logger.info(`  New: ${remote.address}:${remote.port}`);
-    matchedSession.remoteAddress = remote.address;
-    matchedSession.remotePort = remote.port;
+    session.remoteAddress = remote.address;
+    session.remotePort = remote.port;
   }
   
-  matchedSession.lastSeen = Date.now();
+  session.lastSeen = Date.now();
+  
+  // Decapsulate template layer
+  const obfuscatedData = session.template.decapsulate(packetToProcess);
+  if (!obfuscatedData) {
+    logger.warn(`Failed to decapsulate packet from client ${clientID}`);
+    return;
+  }
   
   // Check if heartbeat
   const isHeartbeat = obfuscatedData.length === 1 && obfuscatedData[0] === 0x01;
@@ -157,9 +174,9 @@ function handleDataPacket(packet: Buffer, remote: any) {
   }
   
   // Deobfuscate and forward to WireGuard
-  const deobfuscatedData = matchedSession.obfuscator.deobfuscation(obfuscatedData.buffer);
+  const deobfuscatedData = session.obfuscator.deobfuscation(obfuscatedData.buffer);
   
-  matchedSession.socket.send(deobfuscatedData, 0, deobfuscatedData.length, LOCALWG_PORT, LOCALWG_ADDRESS, (error) => {
+  session.socket.send(deobfuscatedData, 0, deobfuscatedData.length, LOCALWG_PORT, LOCALWG_ADDRESS, (error) => {
     if (error) {
       logger.error(`Failed to send data to WireGuard for client ${clientID}`);
     }
@@ -377,20 +394,12 @@ server.on('message', async (message, remote) => {
           packetToDecapsulate = secureResult.data;
         }
         
-        // Decapsulate with protocol template
-        const result = session.template.decapsulate(packetToDecapsulate);
-        if (!result) {
+        // Decapsulate with protocol template (returns data only, clientID already verified)
+        const obfuscatedData = session.template.decapsulate(packetToDecapsulate);
+        if (!obfuscatedData) {
           logger.warn(`Failed to decapsulate packet from client ${clientID}`);
           return;
         }
-        
-        // Verify clientID matches
-        if (result.clientID.toString('hex') !== clientID) {
-          logger.warn(`ClientID mismatch: expected ${clientID}, got ${result.clientID.toString('hex')}`);
-          return;
-        }
-        
-        const obfuscatedData = result.data;
         
         // Check if heartbeat (1 byte = 0x01)
         const isHeartbeat = obfuscatedData.length === 1 && obfuscatedData[0] === 0x01;

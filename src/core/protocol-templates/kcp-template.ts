@@ -1,7 +1,8 @@
 /**
  * KCP Protocol Template (ID: 2)
  * Mimics KCP (made in China, used by Chinese mobile games)
- * Overhead: 32 bytes
+ * Packet structure: [ClientID: 16 bytes][KCP Header: 24 bytes][Data: N bytes]
+ * Overhead: 40 bytes total (16 clientID + 24 KCP header)
  */
 
 import { BaseTemplate, TemplateParams } from './base-template';
@@ -18,10 +19,10 @@ export class KcpTemplate extends BaseTemplate {
   }
   
   encapsulate(data: Buffer, clientID: Buffer): Buffer {
-    // KCP header: 32 bytes total
-    const header = Buffer.alloc(32);
+    // KCP header: 24 bytes
+    const header = Buffer.alloc(24);
     
-    // Conv (4 bytes): first 4 bytes of clientID
+    // Conv (4 bytes): use first 4 bytes of clientID for realism
     clientID.copy(header, 0, 0, 4);
     
     // Cmd (1 byte): 0x51 = data packet
@@ -42,30 +43,24 @@ export class KcpTemplate extends BaseTemplate {
     // Una (4 bytes): unacknowledged (simulate sn - 1)
     header.writeUInt32LE(Math.max(0, this.sequenceNumber - 1), 16);
     
-    // User data (12 bytes): last 12 bytes of clientID
-    clientID.copy(header, 20, 4, 16);
+    // Len (4 bytes): payload length
+    header.writeUInt32LE(data.length, 20);
     
-    return Buffer.concat([header, data]);
+    // Packet structure: [clientID][header][data]
+    return Buffer.concat([clientID, header, data]);
   }
   
-  decapsulate(packet: Buffer): { clientID: Buffer; data: Buffer } | null {
-    if (packet.length < 32) {
-      return null; // Too short
+  decapsulate(packet: Buffer): Buffer | null {
+    // Packet must have: 16 (clientID) + 24 (header) = 40 bytes minimum
+    if (packet.length < 40) {
+      return null;
     }
     
-    // Extract conv (first 4 bytes of clientID)
-    const clientIDPart1 = packet.slice(0, 4);
+    // ClientID is at bytes 0-15 (extracted by caller)
+    // KCP header is at bytes 16-39
+    // Data starts at byte 40
     
-    // Extract user data (last 12 bytes of clientID)
-    const clientIDPart2 = packet.slice(20, 32);
-    
-    // Reconstruct full clientID
-    const clientID = Buffer.concat([clientIDPart1, clientIDPart2]);
-    
-    // Extract obfuscated data
-    const data = packet.slice(32);
-    
-    return { clientID, data };
+    return packet.slice(40);
   }
   
   updateState(): void {

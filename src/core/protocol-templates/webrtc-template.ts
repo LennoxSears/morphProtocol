@@ -1,7 +1,8 @@
 /**
  * WebRTC/DTLS Template (ID: 4)
  * Mimics DTLS application data (used by WeChat, DingTalk)
- * Overhead: 29 bytes (13 header + 16 clientID in payload)
+ * Packet structure: [ClientID: 16 bytes][DTLS Header: 13 bytes][Data: N bytes]
+ * Overhead: 29 bytes total (16 clientID + 13 DTLS header)
  */
 
 import { BaseTemplate, TemplateParams } from './base-template';
@@ -37,27 +38,24 @@ export class WebRtcTemplate extends BaseTemplate {
     seqBuf.writeBigUInt64BE(BigInt(this.sequence48bit));
     seqBuf.copy(header, 5, 2, 8); // Copy last 6 bytes
     
-    // Length (2 bytes): clientID (16) + data length
-    header.writeUInt16BE(16 + data.length, 11);
+    // Length (2 bytes): data length only
+    header.writeUInt16BE(data.length, 11);
     
-    // Payload: full 16-byte clientID + obfuscated data
-    const payload = Buffer.concat([clientID, data]);
-    
-    return Buffer.concat([header, payload]);
+    // Packet structure: [clientID][header][data]
+    return Buffer.concat([clientID, header, data]);
   }
   
-  decapsulate(packet: Buffer): { clientID: Buffer; data: Buffer } | null {
-    if (packet.length < 13 + 16) {
-      return null; // Too short
+  decapsulate(packet: Buffer): Buffer | null {
+    // Packet must have: 16 (clientID) + 13 (header) = 29 bytes minimum
+    if (packet.length < 29) {
+      return null;
     }
     
-    // Extract full clientID from payload (first 16 bytes after header)
-    const clientID = packet.slice(13, 29);
+    // ClientID is at bytes 0-15 (extracted by caller)
+    // DTLS header is at bytes 16-28
+    // Data starts at byte 29
     
-    // Extract obfuscated data
-    const data = packet.slice(29);
-    
-    return { clientID, data };
+    return packet.slice(29);
   }
   
   updateState(): void {

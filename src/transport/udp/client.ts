@@ -5,10 +5,10 @@ import { fnInitor } from '../../core/function-initializer';
 import { Encryptor } from '../../crypto/encryptor';
 import { getClientConfig } from '../../config';
 import { logger } from '../../utils/logger';
-import { ProtocolTemplate } from '../../core/protocol-templates/base-template';
+import { ProtocolTemplate, extractClientID } from '../../core/protocol-templates/base-template';
 import { createTemplate } from '../../core/protocol-templates/template-factory';
 import { selectRandomTemplate } from '../../core/protocol-templates/template-selector';
-import { deriveSessionKeys, encapsulateSecure, SessionKeys } from '../../core/packet-security';
+import { deriveSessionKeys, encapsulateSecure, decapsulateSecure, SessionKeys } from '../../core/packet-security';
 
 let client: any;
 let handshakeInterval: NodeJS.Timeout;
@@ -334,13 +334,31 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
       } else if (remote.port === newServerPort) {
         // Update last received time when we get data from server
         lastReceivedTime = Date.now();
-        sendToLocalWG(message);
+        
+        // Decapsulate packet from server
+        let packetToProcess = message;
+        
+        // If security enabled, decapsulate security layer first
+        if (sessionKeys) {
+          const secureResult = decapsulateSecure(message, sessionKeys.sessionKey, sessionKeys.hmacKey, packetSequence - 1);
+          if (!secureResult) {
+            logger.warn('Failed to decapsulate secure packet from server');
+            return;
+          }
+          packetToProcess = secureResult.data;
+        }
+        
+        // Decapsulate template layer
+        const obfuscatedData = protocolTemplate.decapsulate(packetToProcess);
+        if (!obfuscatedData) {
+          logger.warn('Failed to decapsulate template packet from server');
+          return;
+        }
+        
+        sendToLocalWG(obfuscatedData.buffer);
       } else {
-        // Message received from the new UDP server
-        logger.info(`Received data from unknown server: ${message.toString()}`);
-
-        // Process the received data from the new server
-        // ...
+        // Message received from unknown server
+        logger.info(`Received data from unknown server: ${remote.address}:${remote.port}`);
       }
     });
 
