@@ -5,7 +5,7 @@ import { fnInitor } from '../../core/function-initializer';
 import { Encryptor } from '../../crypto/encryptor';
 import { getClientConfig } from '../../config';
 import { logger } from '../../utils/logger';
-import { ProtocolTemplate, extractClientID } from '../../core/protocol-templates/base-template';
+import { ProtocolTemplate } from '../../core/protocol-templates/base-template';
 import { createTemplate } from '../../core/protocol-templates/template-factory';
 import { selectRandomTemplate } from '../../core/protocol-templates/template-selector';
 import { deriveSessionKeys, encapsulateSecure, decapsulateSecure, SessionKeys } from '../../core/packet-security';

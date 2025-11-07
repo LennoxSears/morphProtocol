@@ -6,7 +6,7 @@ import { Encryptor } from '../../crypto/encryptor';
 import { getServerConfig } from '../../config';
 import { logger } from '../../utils/logger';
 import { UserInfo } from '../../types';
-import { ProtocolTemplate, extractClientID } from '../../core/protocol-templates/base-template';
+import { ProtocolTemplate } from '../../core/protocol-templates/base-template';
 import { createTemplate } from '../../core/protocol-templates/template-factory';
 import { deriveSessionKeys, decapsulateSecure, encapsulateSecure, SessionKeys } from '../../core/packet-security';
 import { RateLimiter } from '../../core/rate-limiter';
@@ -48,7 +48,8 @@ logger.info('Rate limiters initialized');
 
 // Client session structure
 interface ClientSession {
-  clientID: string;           // hex string (32 chars)
+  clientID: string;           // hex string (32 chars) - full 16-byte ID
+  headerID: string;           // hex string - protocol-specific ID (4-8 bytes)
   remoteAddress: string;
   remotePort: number;
   socket: dgram.Socket;
@@ -62,8 +63,12 @@ interface ClientSession {
   lastSeen: number;
 }
 
-// Map to store active sessions by clientID
-const activeSessions: Map<string, ClientSession> = new Map();
+// DUAL INDEXING for O(1) session lookup
+// Index 1: Fast lookup by current network location + headerID
+const ipIndex: Map<string, string> = new Map(); // "ip:port:headerID" → fullClientID
+
+// Index 2: Session storage by stable identifier
+const activeSessions: Map<string, ClientSession> = new Map(); // fullClientID → Session
 
 // Helper function to handle close messages
 function handleCloseMessage(remote: any) {
@@ -87,78 +92,114 @@ function handleCloseMessage(remote: any) {
   // Report traffic and cleanup
   subTraffic(session.userInfo.userId, session.userInfo.traffic);
   session.socket.close();
+  
+  // Remove from both indexes
   activeSessions.delete(foundClientID);
+  const ipKey = `${session.remoteAddress}:${session.remotePort}:${session.headerID}`;
+  ipIndex.delete(ipKey);
+  logger.info(`Removed from ipIndex: ${ipKey}`);
   subClientNum(HOST_NAME);
 }
 
 // Helper function to handle data packets (with protocol template encapsulation and security)
 function handleDataPacket(packet: Buffer, remote: any) {
-  // Extract clientID from first 16 bytes (O(1) operation)
   let packetToProcess = packet;
-  let clientIDBuffer: Buffer;
-  
-  // Check if packet has security layer
-  // Security layer format: [encryptedClientID: 16][seq: 4][ts: 4][hmac: 32][data]
-  // We need to try decapsulating security first to get the real clientID
-  
-  // Try to extract clientID - could be encrypted or plaintext
-  if (packet.length < 16) {
-    logger.warn(`Packet too short from ${remote.address}:${remote.port}`);
-    return;
-  }
-  
-  // First, try to extract encrypted clientID and find session
-  // We'll try both encrypted and plaintext clientID extraction
   let session: ClientSession | null = null;
   let clientID: string = '';
   
-  // Strategy: Try all active sessions' security keys to decrypt clientID
-  // This is still O(n) but only for the 16-byte clientID decryption, not full packet
-  for (const [sessionClientID, sess] of activeSessions.entries()) {
-    if (sess.sessionKeys) {
-      // Try to decapsulate secure packet
-      const secureResult = decapsulateSecure(packet, sess.sessionKeys.sessionKey, sess.sessionKeys.hmacKey, sess.lastSequence);
-      if (secureResult && secureResult.clientID.toString('hex') === sessionClientID) {
-        session = sess;
-        clientID = sessionClientID;
-        clientIDBuffer = secureResult.clientID;
-        packetToProcess = secureResult.data;
-        session.lastSequence = secureResult.sequence;
+  // Step 1: Handle security layer if present
+  if (packet.length >= 56) { // Min size for secure packet: 16+4+4+32
+    // Try to find session by attempting security decapsulation
+    // This is O(n) but only for security validation, not full packet processing
+    for (const [sessionClientID, sess] of activeSessions.entries()) {
+      if (sess.sessionKeys) {
+        const secureResult = decapsulateSecure(packet, sess.sessionKeys.sessionKey, sess.sessionKeys.hmacKey, sess.lastSequence);
+        if (secureResult && secureResult.clientID.toString('hex') === sessionClientID) {
+          session = sess;
+          clientID = sessionClientID;
+          packetToProcess = secureResult.data;
+          session.lastSequence = secureResult.sequence;
+          break;
+        }
+      }
+    }
+    
+    if (session) {
+      // Security layer decapsulated, now process template layer
+      // (skip to template decapsulation below)
+    } else {
+      // Not a valid secure packet, try as plaintext
+      packetToProcess = packet;
+    }
+  }
+  
+  // Step 2: If no session found via security layer, use dual indexing
+  if (!session) {
+    // Extract headerID from packet (protocol-specific)
+    // We need to detect template type first
+    let headerID: Buffer | null = null;
+    let template: ProtocolTemplate | null = null;
+    
+    // Try each template type to extract headerID
+    for (const templateId of [1, 2, 3]) {
+      const testTemplate = createTemplate(templateId);
+      const extractedID = testTemplate.extractHeaderID(packet);
+      if (extractedID) {
+        headerID = extractedID;
+        template = testTemplate;
         break;
       }
     }
-  }
-  
-  // If no secure match, try plaintext clientID extraction
-  if (!session) {
-    clientIDBuffer = extractClientID(packet);
-    if (!clientIDBuffer) {
-      logger.warn(`Failed to extract clientID from ${remote.address}:${remote.port}`);
+    
+    if (!headerID) {
+      logger.warn(`Failed to extract headerID from ${remote.address}:${remote.port}`);
       return;
     }
     
-    clientID = clientIDBuffer.toString('hex');
+    // Build ipIndex key
+    const ipKey = `${remote.address}:${remote.port}:${headerID.toString('hex')}`;
+    
+    // O(1) lookup in ipIndex
+    clientID = ipIndex.get(ipKey) || '';
+    
+    // If not found, try to find by headerID alone (IP migration case)
+    if (!clientID) {
+      const headerIDHex = headerID.toString('hex');
+      for (const [cid, sess] of activeSessions.entries()) {
+        if (sess.headerID === headerIDHex) {
+          clientID = cid;
+          logger.info(`IP migration detected for client ${clientID}`);
+          logger.info(`  Old: ${sess.remoteAddress}:${sess.remotePort}`);
+          logger.info(`  New: ${remote.address}:${remote.port}`);
+          
+          // Update ipIndex
+          const oldIpKey = `${sess.remoteAddress}:${sess.remotePort}:${headerIDHex}`;
+          ipIndex.delete(oldIpKey);
+          ipIndex.set(ipKey, clientID);
+          
+          // Update session
+          sess.remoteAddress = remote.address;
+          sess.remotePort = remote.port;
+          break;
+        }
+      }
+    }
+    
+    if (!clientID) {
+      logger.warn(`Received packet from unknown session at ${remote.address}:${remote.port}`);
+      return;
+    }
+    
     session = activeSessions.get(clientID) || null;
-    packetToProcess = packet;
-  }
-  
-  if (!session) {
-    logger.warn(`Received packet from unknown session ${clientID} at ${remote.address}:${remote.port}`);
-    return;
-  }
-  
-  // Update IP if changed (IP migration!)
-  if (session.remoteAddress !== remote.address || session.remotePort !== remote.port) {
-    logger.info(`IP migration detected for client ${clientID}`);
-    logger.info(`  Old: ${session.remoteAddress}:${session.remotePort}`);
-    logger.info(`  New: ${remote.address}:${remote.port}`);
-    session.remoteAddress = remote.address;
-    session.remotePort = remote.port;
+    if (!session) {
+      logger.warn(`Session not found for clientID ${clientID}`);
+      return;
+    }
   }
   
   session.lastSeen = Date.now();
   
-  // Decapsulate template layer
+  // Step 3: Decapsulate template layer
   const obfuscatedData = session.template.decapsulate(packetToProcess);
   if (!obfuscatedData) {
     logger.warn(`Failed to decapsulate packet from client ${clientID}`);
@@ -208,7 +249,13 @@ function checkInactivityTimeout(clientID: string) {
     // Report traffic and cleanup
     subTraffic(session.userInfo.userId, session.userInfo.traffic);
     session.socket.close();
+    
+    // Remove from both indexes
     activeSessions.delete(clientID);
+    const ipKey = `${session.remoteAddress}:${session.remotePort}:${session.headerID}`;
+    ipIndex.delete(ipKey);
+    logger.info(`Removed from ipIndex: ${ipKey}`);
+    
     subClientNum(HOST_NAME);
   }
 }
@@ -273,6 +320,15 @@ server.on('message', async (message, remote) => {
       logger.info(`  Old IP: ${session.remoteAddress}:${session.remotePort}`);
       logger.info(`  New IP: ${remote.address}:${remote.port}`);
       
+      // Update ipIndex if IP changed
+      if (session.remoteAddress !== remote.address || session.remotePort !== remote.port) {
+        const oldIpKey = `${session.remoteAddress}:${session.remotePort}:${session.headerID}`;
+        const newIpKey = `${remote.address}:${remote.port}:${session.headerID}`;
+        ipIndex.delete(oldIpKey);
+        ipIndex.set(newIpKey, clientID);
+        logger.info(`Updated ipIndex: ${oldIpKey} → ${newIpKey}`);
+      }
+      
       // Update IP and port
       session.remoteAddress = remote.address;
       session.remotePort = remote.port;
@@ -283,7 +339,9 @@ server.on('message', async (message, remote) => {
       const response = {
         port: responsePort,
         clientID: clientIDBase64,
-        status: 'reconnected'
+        status: 'reconnected',
+        sessionSalt: sessionKeys ? Buffer.from(sessionKeys.sessionKey).toString('base64') : undefined,
+        serverNonce: session.lastSequence
       };
       const responseEncrypted = encryptor.simpleEncrypt(JSON.stringify(response));
       
@@ -319,9 +377,15 @@ server.on('message', async (message, remote) => {
     
     const newSocket = dgram.createSocket('udp4');
     
+    // Extract headerID from clientID (protocol-specific)
+    // QUIC: first 8 bytes, KCP: first 4 bytes, Gaming: first 4 bytes
+    const headerID = clientIDBuffer.slice(0, template.id === 1 ? 8 : 4).toString('hex');
+    logger.info(`HeaderID: ${headerID}`);
+    
     // Create session
     const session: ClientSession = {
       clientID,
+      headerID,
       remoteAddress: remote.address,
       remotePort: remote.port,
       socket: newSocket,
@@ -335,7 +399,12 @@ server.on('message', async (message, remote) => {
       lastSeen: Date.now()
     };
     
+    // Add to both indexes
     activeSessions.set(clientID, session);
+    const ipKey = `${remote.address}:${remote.port}:${headerID}`;
+    ipIndex.set(ipKey, clientID);
+    logger.info(`Added to ipIndex: ${ipKey} → ${clientID}`);
+    
     addClientNum(HOST_NAME);
     // Handle messages from WireGuard
     newSocket.on('message', (wgMessage, wgRemote) => {

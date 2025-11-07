@@ -10,10 +10,9 @@ export interface TemplateWeight {
 // Weighted selection for generic protocol templates
 // Total weight: 100
 export const TEMPLATE_WEIGHTS: TemplateWeight[] = [
-  { id: 1, weight: 30 },  // QUIC - universal, most common
-  { id: 2, weight: 30 },  // KCP - made in China, gaming
-  { id: 3, weight: 20 },  // Generic Gaming - flexible
-  { id: 4, weight: 20 }   // WebRTC - communication, WeChat uses it
+  { id: 1, weight: 40 },  // QUIC - universal, most common
+  { id: 2, weight: 35 },  // KCP - made in China, gaming
+  { id: 3, weight: 25 }   // Generic Gaming - flexible
 ];
 
 /**

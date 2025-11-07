@@ -6,7 +6,6 @@ import { ProtocolTemplate, TemplateParams } from './base-template';
 import { QuicTemplate } from './quic-template';
 import { KcpTemplate } from './kcp-template';
 import { GenericGamingTemplate } from './generic-gaming-template';
-import { WebRtcTemplate } from './webrtc-template';
 
 /**
  * Create protocol template instance by ID
@@ -19,9 +18,7 @@ export function createTemplate(id: number, params?: TemplateParams): ProtocolTem
       return new KcpTemplate(params);
     case 3:
       return new GenericGamingTemplate(params);
-    case 4:
-      return new WebRtcTemplate(params);
     default:
-      throw new Error(`Unknown template ID: ${id}`);
+      throw new Error(`Unknown template ID: ${id}. Valid IDs: 1 (QUIC), 2 (KCP), 3 (Generic Gaming)`);
   }
 }

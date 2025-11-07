@@ -2,9 +2,12 @@
  * Base interface for protocol templates
  * Templates wrap obfuscated data to mimic legitimate protocols
  * 
- * IMPORTANT: All templates MUST place the 16-byte clientID at the start of the packet
- * for O(1) session lookup. Packet structure:
- * [ClientID: 16 bytes][Protocol Header: varies][Obfuscated Data: N bytes]
+ * DUAL INDEXING APPROACH:
+ * - Templates use protocol-native header fields as identifiers (4-8 bytes)
+ * - Server maintains two indexes:
+ *   1. ipIndex: Map<"ip:port:headerID", fullClientID> for O(1) lookup
+ *   2. sessions: Map<fullClientID, Session> for IP migration support
+ * - Zero packet overhead (use existing header fields)
  */
 
 export interface TemplateParams {
@@ -16,17 +19,25 @@ export interface ProtocolTemplate {
   readonly name: string;
   
   /**
+   * Extract header ID from packet for dual indexing
+   * This is the protocol-native identifier (QUIC connID, KCP conv, etc.)
+   * @param packet - Complete packet with protocol header
+   * @returns Header ID buffer (4-8 bytes depending on protocol)
+   */
+  extractHeaderID(packet: Buffer): Buffer | null;
+  
+  /**
    * Encapsulate obfuscated data with protocol header
    * @param data - Obfuscated payload
-   * @param clientID - 16-byte client identifier (MUST be placed at bytes 0-15)
-   * @returns Complete packet: [clientID][protocol header][data]
+   * @param clientID - 16-byte client identifier (used to derive header fields)
+   * @returns Complete packet: [protocol header][data]
    */
   encapsulate(data: Buffer, clientID: Buffer): Buffer;
   
   /**
    * Decapsulate protocol packet to extract obfuscated data
-   * @param packet - Complete packet (clientID already extracted by caller)
-   * @returns Obfuscated payload (without clientID or protocol headers)
+   * @param packet - Complete packet with protocol header
+   * @returns Obfuscated payload (without protocol headers)
    */
   decapsulate(packet: Buffer): Buffer | null;
   
@@ -41,17 +52,6 @@ export interface ProtocolTemplate {
   updateState(): void;
 }
 
-/**
- * Static helper to extract clientID from any template packet
- * All templates place clientID at bytes 0-15
- */
-export function extractClientID(packet: Buffer): Buffer | null {
-  if (packet.length < 16) {
-    return null;
-  }
-  return packet.slice(0, 16);
-}
-
 export abstract class BaseTemplate implements ProtocolTemplate {
   abstract readonly id: number;
   abstract readonly name: string;
@@ -63,6 +63,7 @@ export abstract class BaseTemplate implements ProtocolTemplate {
     this.sequenceNumber = params?.initialSeq ?? Math.floor(Math.random() * 65536);
   }
   
+  abstract extractHeaderID(packet: Buffer): Buffer | null;
   abstract encapsulate(data: Buffer, clientID: Buffer): Buffer;
   abstract decapsulate(packet: Buffer): Buffer | null;
   
