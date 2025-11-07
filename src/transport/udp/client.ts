@@ -355,7 +355,7 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
           return;
         }
         
-        sendToLocalWG(obfuscatedData.buffer);
+        sendToLocalWG(Buffer.from(obfuscatedData).buffer);
       } else {
         // Message received from unknown server
         logger.info(`Received data from unknown server: ${remote.address}:${remote.port}`);
@@ -440,7 +440,7 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
 
 
 export function stopUdpClient(): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
+  return new Promise<void>((resolve, _reject) => {
     // Stop sending handshake data and heartbeats
     if (handshakeInterval) {
       clearInterval(handshakeInterval);

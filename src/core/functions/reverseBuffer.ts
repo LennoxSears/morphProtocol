@@ -1,4 +1,4 @@
-function reverseBuffer(input: Uint8Array, keyArray: Uint8Array, initor:any): Uint8Array {
+function reverseBuffer(input: Uint8Array, _keyArray: Uint8Array, _initor:any): Uint8Array {
     const length = input.length;
     const reversed = new Uint8Array(length);
 

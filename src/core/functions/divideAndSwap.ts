@@ -1,4 +1,4 @@
-function divideAndSwap(input: Uint8Array, keyArray: Uint8Array, initor:any): Uint8Array {
+function divideAndSwap(input: Uint8Array, _keyArray: Uint8Array, _initor:any): Uint8Array {
     const length = input.length;
 
     // Calculate the midpoint

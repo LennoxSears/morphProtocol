@@ -1,15 +1,15 @@
-function substitution(input: Uint8Array, keyArray: Uint8Array, initor:number[]): Uint8Array {
+function substitution(input: Uint8Array, _keyArray: Uint8Array, _initor:number[]): Uint8Array {
     const length = input.length;
     const obfuscated = new Uint8Array(length);
 
     for (let i = 0; i < length; i++) {
-        obfuscated[i] = initor[input[i]];
+        obfuscated[i] = _initor[input[i]];
     }
 
     return obfuscated;
 }
 
-function de_substitution(input: Uint8Array, keyArray: Uint8Array, initor:number[]): Uint8Array {
+function de_substitution(input: Uint8Array, _keyArray: Uint8Array, _initor:number[]): Uint8Array {
     const length = input.length;
     const deobfuscated = new Uint8Array(length);
 
@@ -17,7 +17,7 @@ function de_substitution(input: Uint8Array, keyArray: Uint8Array, initor:number[
         const value = input[i];
 
         // Find the index of the value in the table
-        const index = initor.findIndex((item) => item === value);
+        const index = _initor.findIndex((item: number) => item === value);
 
         if (index !== -1) {
             deobfuscated[i] = index;

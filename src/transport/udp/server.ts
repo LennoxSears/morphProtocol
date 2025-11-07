@@ -217,7 +217,7 @@ function handleDataPacket(packet: Buffer, remote: any) {
   }
   
   // Deobfuscate and forward to WireGuard
-  const deobfuscatedData = session.obfuscator.deobfuscation(obfuscatedData.buffer);
+  const deobfuscatedData = session.obfuscator.deobfuscation(Buffer.from(obfuscatedData).buffer);
   
   session.socket.send(deobfuscatedData, 0, deobfuscatedData.length, LOCALWG_PORT, LOCALWG_ADDRESS, (error) => {
     if (error) {
@@ -263,9 +263,9 @@ function checkInactivityTimeout(clientID: string) {
 }
 
 // Traffic reporting interval
-const trafficInterval = setInterval(() => {
+setInterval(() => {
   logger.info('Updating traffic for all active sessions');
-  activeSessions.forEach((session, clientID) => {
+  activeSessions.forEach((session, _clientID) => {
     if (session.userInfo.traffic > 0) {
       subTraffic(session.userInfo.userId, session.userInfo.traffic);
       session.userInfo.traffic = 0;
@@ -415,7 +415,7 @@ server.on('message', async (message, remote) => {
         if (!session) return;
         
         // Obfuscate data from WireGuard
-        const obfuscatedData = session.obfuscator.obfuscation(wgMessage);
+        const obfuscatedData = session.obfuscator.obfuscation(Buffer.from(wgMessage).buffer);
         
         // Encapsulate with protocol template
         let packet = session.template.encapsulate(Buffer.from(obfuscatedData), clientIDBuffer);
@@ -443,7 +443,7 @@ server.on('message', async (message, remote) => {
         const session = activeSessions.get(clientID);
         if (!session) return;
         
-        let packetToDecapsulate = wgMessage;
+        let packetToDecapsulate: Buffer = Buffer.from(wgMessage);
         
         // If session has security enabled, decapsulate security layer first
         if (session.sessionKeys) {
@@ -480,7 +480,7 @@ server.on('message', async (message, remote) => {
         
         if (!isHeartbeat) {
           // Deobfuscate and forward to WireGuard
-          const deobfuscatedData = session.obfuscator.deobfuscation(obfuscatedData.buffer);
+          const deobfuscatedData = session.obfuscator.deobfuscation(Buffer.from(obfuscatedData).buffer);
           
           newSocket.send(deobfuscatedData, 0, deobfuscatedData.length, LOCALWG_PORT, LOCALWG_ADDRESS, (error) => {
             if (error) {
@@ -509,6 +509,7 @@ server.on('message', async (message, remote) => {
         sessionSalt: sessionSalt.toString('base64'),
         serverNonce: serverNonce
       };
+      const responseEncrypted = encryptor.simpleEncrypt(JSON.stringify(response));
       
       server.send(responseEncrypted, 0, responseEncrypted.length, remote.port, remote.address, (error) => {
         if (error) {

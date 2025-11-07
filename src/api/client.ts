@@ -1,6 +1,5 @@
-import axios, { AxiosResponse } from 'axios';
+import axios from 'axios';
 import { getServerConfig } from '../config';
-import { SubTrafficRequest, ClientNumRequest, UpdateServerInfoRequest } from './types';
 import { logger } from '../utils/logger';
 
 const config = getServerConfig();
@@ -20,7 +19,7 @@ export const subTraffic = async (userId: string | undefined, traffic: number | u
                 traffic: traffic
             }
         })
-            .then(function (response: AxiosResponse) {
+            .then(function (response: any) {
                 logger.debug('Traffic subtracted', { userId, traffic, response: response.data });
             })
             .catch(function (error: any) {
@@ -43,7 +42,7 @@ export const addClientNum = async (name: string | undefined) => {
                 name: name
             }
         })
-            .then(function (response: AxiosResponse) {
+            .then(function (response: any) {
                 logger.debug('Client count incremented', { name, response: response.data });
             })
             .catch(function (error: any) {
@@ -66,7 +65,7 @@ export const subClientNum = async (name: string | undefined) => {
                 name: name
             }
         })
-            .then(function (response: AxiosResponse) {
+            .then(function (response: any) {
                 logger.debug('Client count decremented', { name, response: response.data });
             })
             .catch(function (error: any) {
@@ -93,7 +92,7 @@ export const updateServerInfo = async (name: string | undefined, ip: string | un
                 status: 'running'
             }
         })
-            .then(function (response: AxiosResponse) {
+            .then(function () {
                 logger.info('Server info updated', { name, ip, port });
             })
             .catch(function (error: any) {

@@ -1,4 +1,4 @@
-function reverseBits(input: Uint8Array, keyArray: Uint8Array, initor:any): Uint8Array {
+function reverseBits(input: Uint8Array, _keyArray: Uint8Array, _initor:any): Uint8Array {
     const reversed = new Uint8Array(input.length);
 
     for (let i = 0; i < input.length; i++) {
@@ -17,7 +17,7 @@ function reverseBits(input: Uint8Array, keyArray: Uint8Array, initor:any): Uint8
     return reversed;
 }
 
-function de_reverseBits(input: Uint8Array, keyArray: Uint8Array, initor:any): Uint8Array {
+function de_reverseBits(input: Uint8Array, _keyArray: Uint8Array, _initor:any): Uint8Array {
     const length = input.length;
     const deobfuscated = new Uint8Array(length);
 

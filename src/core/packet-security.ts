@@ -28,8 +28,8 @@ export interface SessionKeys {
  */
 export function deriveSessionKeys(sharedSecret: Buffer, salt: Buffer): SessionKeys {
   // Use HKDF (HMAC-based Key Derivation Function)
-  const sessionKey = crypto.hkdfSync('sha256', sharedSecret, salt, Buffer.from('morph-session-key'), 16);
-  const hmacKey = crypto.hkdfSync('sha256', sharedSecret, salt, Buffer.from('morph-hmac-key'), 32);
+  const sessionKey = Buffer.from(crypto.hkdfSync('sha256', sharedSecret, salt, Buffer.from('morph-session-key'), 16));
+  const hmacKey = Buffer.from(crypto.hkdfSync('sha256', sharedSecret, salt, Buffer.from('morph-hmac-key'), 32));
   
   return { sessionKey, hmacKey };
 }
@@ -119,7 +119,7 @@ export function encapsulateSecure(
   clientID: Buffer,
   data: Buffer,
   sequence: number,
-  sessionKey: Buffer,
+  _sessionKey: Buffer,
   hmacKey: Buffer
 ): Buffer {
   const timestamp = Math.floor(Date.now() / 1000);
@@ -155,7 +155,7 @@ export function encapsulateSecure(
  */
 export function decapsulateSecure(
   packet: Buffer,
-  sessionKey: Buffer,
+  _sessionKey: Buffer,
   hmacKey: Buffer,
   lastSequence: number
 ): { clientID: Buffer; data: Buffer; sequence: number } | null {

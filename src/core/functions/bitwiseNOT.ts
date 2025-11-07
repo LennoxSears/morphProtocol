@@ -1,5 +1,5 @@
 // Reversible obfuscation function: Bitwise NOT
-function bitwiseNOT(input: Uint8Array, keyArray: Uint8Array, initor:any): Uint8Array {
+function bitwiseNOT(input: Uint8Array, _keyArray: Uint8Array, _initor:any): Uint8Array {
     const obfuscated = new Uint8Array(input.length);
 
     for (let i = 0; i < input.length; i++) {

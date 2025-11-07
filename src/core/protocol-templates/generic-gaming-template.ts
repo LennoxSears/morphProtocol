@@ -8,7 +8,7 @@
  * Dual Indexing: Uses 4-byte Session ID as headerID
  */
 
-import { BaseTemplate, TemplateParams } from './base-template';
+import { BaseTemplate } from './base-template';
 
 export class GenericGamingTemplate extends BaseTemplate {
   readonly id = 3;

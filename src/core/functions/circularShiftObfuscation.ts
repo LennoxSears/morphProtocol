@@ -1,5 +1,5 @@
 // Obfuscation function: Circular shift
-    function circularShiftObfuscation(input: Uint8Array, keyArray: Uint8Array, initor:any): Uint8Array {
+    function circularShiftObfuscation(input: Uint8Array, _keyArray: Uint8Array, _initor:any): Uint8Array {
         const obfuscated = new Uint8Array(input.length);
 
         for (let i = 0; i < input.length; i++) {
@@ -10,7 +10,7 @@
     }
 
     // Deobfuscation function: Circular shift
-    function de_circularShiftObfuscation(input: Uint8Array, keyArray: Uint8Array, initor:any): Uint8Array {
+    function de_circularShiftObfuscation(input: Uint8Array, _keyArray: Uint8Array, _initor:any): Uint8Array {
         const deobfuscated = new Uint8Array(input.length);
 
         for (let i = 0; i < input.length; i++) {

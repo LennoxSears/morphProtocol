@@ -71,7 +71,7 @@ export class Obfuscator {
     buffer: ArrayBuffer,
     functions: HouseFunctionPair[]
   ): Uint8Array {
-    let obfuscatedData = new Uint8Array(buffer);
+    let obfuscatedData: Uint8Array = new Uint8Array(buffer);
     let keyArray = this.generateKeyArray(obfuscatedData.length);
     if (DEBUG) {
       console.log('\n\n\n');
@@ -80,7 +80,7 @@ export class Obfuscator {
       if (DEBUG) {
         console.log('Original Data:', obfuscatedData);
       }
-      obfuscatedData = func.obfuscation(obfuscatedData, keyArray, func.initor);
+      obfuscatedData = func.obfuscation(obfuscatedData, keyArray, func.initor) as Uint8Array;
       if (DEBUG) {
         console.log('Obfuscated Data:', obfuscatedData);
         console.log('Function is:', func.obfuscation.name);
@@ -95,7 +95,7 @@ export class Obfuscator {
     obfuscated: ArrayBuffer,
     functions: HouseFunctionPair[]
   ): Uint8Array {
-    let deobfuscatedData = new Uint8Array(obfuscated);
+    let deobfuscatedData: Uint8Array = new Uint8Array(obfuscated);
     let keyArray = this.generateKeyArray(deobfuscatedData.length);
     if (DEBUG) {
       console.log('\n\n\n');
@@ -104,7 +104,7 @@ export class Obfuscator {
       if (DEBUG) {
         console.log('Original Data:', deobfuscatedData);
       }
-      deobfuscatedData = functions[i].deobfuscation(deobfuscatedData, keyArray, functions[i].initor);
+      deobfuscatedData = functions[i].deobfuscation(deobfuscatedData, keyArray, functions[i].initor) as Uint8Array;
       if (DEBUG) {
         console.log('Obfuscated Data:', deobfuscatedData);
         console.log('Function is:', functions[i].deobfuscation.name);
@@ -117,12 +117,12 @@ export class Obfuscator {
 
   public obfuscation(data: ArrayBuffer): Uint8Array {
     let that = this;
-    let header = new Uint8Array(crypto.randomBytes(3).buffer);
+    let header = new Uint8Array(crypto.randomBytes(3));
     let fnComboIndex = (header[0] * header[1]) % this.obFunCombosLength;
     let fnCombo = this.functionRegistry.getfunctionPairsIndexCombos();
     let obfuscatedData = this.preObfuscation(
       data,
-      fnCombo[fnComboIndex].map((it, idx) => {
+      fnCombo[fnComboIndex].map((it, _idx) => {
         return that.functionRegistry.functionPairs[it];
       })
     );
@@ -151,8 +151,8 @@ export class Obfuscator {
     let fnComboIndex = (header[0] * header[1]) % this.obFunCombosLength;
     let fnCombo = this.functionRegistry.getfunctionPairsIndexCombos();
     let deObfuscatedData = this.preDeobfuscation(
-      body.buffer,
-      fnCombo[fnComboIndex].map((it, idx) => {
+      Buffer.from(body).buffer,
+      fnCombo[fnComboIndex].map((it, _idx) => {
         return that.functionRegistry.functionPairs[it];
       })
     );

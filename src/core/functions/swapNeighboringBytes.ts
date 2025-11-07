@@ -1,4 +1,4 @@
-function swapNeighboringBytes(input: Uint8Array, keyArray: Uint8Array, initor:any): Uint8Array {
+function swapNeighboringBytes(input: Uint8Array, _keyArray: Uint8Array, _initor:any): Uint8Array {
     const length = input.length;
     const swapped = new Uint8Array(length);
 

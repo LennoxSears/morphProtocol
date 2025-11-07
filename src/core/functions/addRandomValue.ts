@@ -1,18 +1,18 @@
-function addRandomValue(input: Uint8Array, keyArray: Uint8Array, initor:number): Uint8Array {
+function addRandomValue(input: Uint8Array, _keyArray: Uint8Array, _initor:number): Uint8Array {
     const obfuscated = new Uint8Array(input.length);
 
     for (let i = 0; i < input.length; i++) {
-        obfuscated[i] = (input[i] + initor) % 256; // Addition with modulus
+        obfuscated[i] = (input[i] + _initor) % 256; // Addition with modulus
     }
 
     return obfuscated;
 }
 
-function de_addRandomValue(input: Uint8Array, keyArray: Uint8Array, initor:number): Uint8Array {
+function de_addRandomValue(input: Uint8Array, _keyArray: Uint8Array, _initor:number): Uint8Array {
     const deobfuscated = new Uint8Array(input.length);
 
     for (let i = 0; i < input.length; i++) {
-        deobfuscated[i] = (input[i] - initor + 256) % 256; // Subtraction with modulus
+        deobfuscated[i] = (input[i] - _initor + 256) % 256; // Subtraction with modulus
     }
 
     return deobfuscated;
