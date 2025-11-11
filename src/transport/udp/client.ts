@@ -232,7 +232,7 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
           reject("server_full")
         }
         else {
-          // Try to parse as JSON response with port and clientID
+          // Parse JSON response with port and clientID
           try {
             const response = JSON.parse(message.toString());
             if (response.port && response.clientID) {
@@ -242,6 +242,7 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
               logger.info(`Received server response:`);
               logger.info(`  Port: ${newServerPort}`);
               logger.info(`  ClientID confirmed: ${confirmedClientID}`);
+              logger.info(`  Status: ${response.status || 'unknown'}`);
               
               // Verify clientID matches
               if (confirmedClientID !== clientID.toString('base64')) {
@@ -273,37 +274,8 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
               logger.info(`Inactivity detection started (timeout: ${INACTIVITY_TIMEOUT}ms)`);
               
               resolve(clientPort);
-            } else if (!isNaN(parseInt(message.toString(), 10))) {
-              // Fallback: old format (just port number)
-              newServerPort = parseInt(message.toString(), 10);
-              logger.info(`Received new server port (legacy format): ${newServerPort}`);
-              
-              if (handshakeInterval) {
-                clearInterval(handshakeInterval);
-              }
-              
-              heartBeatInterval = setInterval(() => {
-                const heartbeat = getHeartbeatData();
-                client.send(heartbeat, 0, heartbeat.length, newServerPort, HANDSHAKE_SERVER_ADDRESS, (error: any) => {
-                  if (error) {
-                    logger.error('Failed to send heartbeat to new server:', error);
-                  } else {
-                    logger.debug('Heartbeat sent to new server');
-                  }
-                })
-              }, HEARTBEAT_INTERVAL);
-              
-              // Start inactivity check
-              lastReceivedTime = Date.now(); // Initialize
-              if (inactivityCheckInterval) {
-                clearInterval(inactivityCheckInterval);
-              }
-              inactivityCheckInterval = setInterval(checkInactivity, INACTIVITY_CHECK_INTERVAL);
-              logger.info(`Inactivity detection started (timeout: ${INACTIVITY_TIMEOUT}ms)`);
-              
-              resolve(clientPort);
             } else {
-              logger.error('Invalid server response:', message.toString());
+              logger.error('Invalid server response - missing port or clientID:', message.toString());
             }
           } catch (e) {
             logger.error('Failed to parse server response:', message.toString());
