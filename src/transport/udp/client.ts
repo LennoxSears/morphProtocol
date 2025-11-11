@@ -423,7 +423,7 @@ export function stopUdpClient(): Promise<void> {
       let msgClose = encryptor.simpleEncrypt('close')
       client.send(msgClose, 0, msgClose.length, HANDSHAKE_SERVER_PORT, HANDSHAKE_SERVER_ADDRESS, (error: any) => {
         if (error) {
-          logger.error('Failed to send handshake data:', error);
+          logger.error('Failed to send close msg:', error);
         } else {
           logger.info('close msg sent to the handshake server');
           // Close the UDP socket
