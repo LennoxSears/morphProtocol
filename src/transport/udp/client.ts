@@ -43,7 +43,7 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
     const MAX_RETRIES = config.maxRetries;
     const HEARTBEAT_INTERVAL = config.heartbeatInterval;
     const INACTIVITY_TIMEOUT = config.inactivityTimeout;
-    const INACTIVITY_CHECK_INTERVAL = 10000; // Check every 10 seconds
+    const INACTIVITY_CHECK_INTERVAL = 90000; // Check every 90 seconds
     
     // Function to generate heartbeat with current clientID and template
     function getHeartbeatData() {
@@ -420,4 +420,4 @@ export function udpClientStatus(): boolean {
   return clientOpenStatus
 }
 
-//startUdpClient('5.104.80.248')
+startUdpClient('127.0.0.1:12301:f47ac10b-58cc-4372-a567-0e02b2c3d479', 'f+fR6ICm0xsD9vWiRa3eGqIg0ijweznpDd7fyTex1TA=:hA1/740InBE5FBbkzthe+g==')

@@ -325,7 +325,6 @@ server.on('message', async (message, remote) => {
         
         // Check if heartbeat (1 byte = 0x01)
         const isHeartbeat = obfuscatedData.length === 1 && obfuscatedData[0] === 0x01;
-        
         // Update last seen
         session.lastSeen = Date.now();
         

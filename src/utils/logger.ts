@@ -42,5 +42,5 @@ class Logger {
 }
 
 export const logger = new Logger(
-  process.env.LOG_LEVEL ? Number(process.env.LOG_LEVEL) : LogLevel.INFO
+  process.env.LOG_LEVEL ? Number(process.env.LOG_LEVEL) : LogLevel.DEBUG
 );
