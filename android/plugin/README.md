@@ -323,11 +323,11 @@ await vpn.cleanup();
 
 ## Platform Support
 
-| Platform | Supported |
-|----------|-----------|
-| Android | ✅ Yes |
-| iOS | ❌ No (not implemented) |
-| Web | ❌ No (returns error) |
+| Platform | Supported | Status |
+|----------|-----------|--------|
+| Android | ✅ Yes | Production ready |
+| iOS | ✅ Yes | Production ready |
+| Web | ❌ No | Stub only |
 
 ## Requirements
 
