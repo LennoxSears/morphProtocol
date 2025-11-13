@@ -6,12 +6,12 @@ Complete Capacitor plugin and demo application for MorphProtocol VPN client.
 
 This package provides:
 
-1. **Capacitor Plugin** (`@morphprotocol/capacitor-plugin`)
+1. **Capacitor Plugin** (`android/plugin/`)
    - Native Android bridge to MorphProtocol client
    - TypeScript API for JavaScript/TypeScript apps
    - Event system for connection state changes
 
-2. **Demo Application** (`demo-app`)
+2. **Demo Application** (`android/demo-app/`)
    - Complete working example
    - Beautiful UI with connection controls
    - Configuration presets
@@ -82,45 +82,43 @@ npx cap open android
 
 ```
 morphProtocol/
-├── android-client/                    # Kotlin client implementation
-│   ├── src/main/kotlin/
-│   │   └── com/morphprotocol/client/
-│   │       ├── crypto/Encryptor.kt
-│   │       ├── core/
-│   │       │   ├── functions/         # 11 obfuscation functions
-│   │       │   ├── templates/         # Protocol templates
-│   │       │   ├── Obfuscator.kt
-│   │       │   └── FunctionRegistry.kt
-│   │       ├── network/MorphUdpClient.kt
-│   │       └── MorphClient.kt
-│   └── README.md
-│
-├── capacitor-plugin/                  # Capacitor plugin
-│   ├── src/
-│   │   ├── definitions.ts             # TypeScript API definitions
-│   │   ├── index.ts                   # Plugin registration
-│   │   └── web.ts                     # Web stub implementation
-│   ├── android/
-│   │   ├── src/main/java/com/morphprotocol/
-│   │   │   ├── client/                # Copied from android-client
-│   │   │   └── capacitor/
-│   │   │       └── MorphProtocolPlugin.kt  # Capacitor bridge
-│   │   └── build.gradle
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── README.md
-│
-└── demo-app/                          # Demo Capacitor app
-    ├── src/
-    │   ├── App.vue                    # Main UI component
-    │   ├── main.ts                    # Entry point
-    │   ├── style.css                  # Styles
-    │   └── services/
-    │       └── vpn.service.ts         # VPN service wrapper
-    ├── capacitor.config.ts
-    ├── vite.config.ts
-    ├── package.json
-    └── README.md
+└── android/                           # All Android-related code
+    ├── plugin/                        # Capacitor plugin
+    │   ├── src/
+    │   │   ├── definitions.ts         # TypeScript API definitions
+    │   │   ├── index.ts               # Plugin registration
+    │   │   └── web.ts                 # Web stub implementation
+    │   ├── android/
+    │   │   ├── src/main/java/com/morphprotocol/
+    │   │   │   ├── client/            # MorphProtocol client (Kotlin)
+    │   │   │   │   ├── crypto/Encryptor.kt
+    │   │   │   │   ├── core/
+    │   │   │   │   │   ├── functions/ # 11 obfuscation functions
+    │   │   │   │   │   ├── templates/ # Protocol templates
+    │   │   │   │   │   ├── Obfuscator.kt
+    │   │   │   │   │   └── FunctionRegistry.kt
+    │   │   │   │   ├── network/MorphUdpClient.kt
+    │   │   │   │   └── MorphClient.kt
+    │   │   │   └── capacitor/
+    │   │   │       └── MorphProtocolPlugin.kt  # Capacitor bridge
+    │   │   └── build.gradle
+    │   ├── package.json
+    │   ├── tsconfig.json
+    │   └── README.md
+    │
+    ├── demo-app/                      # Demo Capacitor app
+    │   ├── src/
+    │   │   ├── App.vue                # Main UI component
+    │   │   ├── main.ts                # Entry point
+    │   │   ├── style.css              # Styles
+    │   │   └── services/
+    │   │       └── vpn.service.ts     # VPN service wrapper
+    │   ├── capacitor.config.ts
+    │   ├── vite.config.ts
+    │   ├── package.json
+    │   └── README.md
+    │
+    └── README.md                      # Android overview
 ```
 
 ## Features
@@ -318,29 +316,22 @@ npm --version
 npm install -g @capacitor/cli
 ```
 
-### Step 1: Build Android Client
+### Step 1: Build Capacitor Plugin
 
 ```bash
-cd android-client
-# No build needed - Kotlin source files are used directly
-```
-
-### Step 2: Build Capacitor Plugin
-
-```bash
-cd capacitor-plugin
+cd android/plugin
 npm install
 npm run build
 ```
 
-### Step 3: Setup Demo App
+### Step 2: Setup Demo App
 
 ```bash
-cd demo-app
+cd ../demo-app
 npm install
 ```
 
-### Step 4: Build and Sync
+### Step 3: Build and Sync
 
 ```bash
 # Build web assets
@@ -366,7 +357,7 @@ npx cap open android
 ### Plugin Development
 
 ```bash
-cd capacitor-plugin
+cd android/plugin
 
 # Make changes to TypeScript or Kotlin code
 
@@ -381,7 +372,7 @@ npx cap sync
 ### Demo App Development
 
 ```bash
-cd demo-app
+cd android/demo-app
 
 # Start dev server (for UI development)
 npm run dev
@@ -477,7 +468,7 @@ await MorphProtocol.connect({
 
 ```bash
 # Clean and rebuild
-cd capacitor-plugin
+cd android/plugin
 rm -rf node_modules dist
 npm install
 npm run build
@@ -487,7 +478,7 @@ npm run build
 
 ```bash
 # Clean and rebuild
-cd demo-app
+cd android/demo-app
 rm -rf node_modules dist android
 npm install
 npm run build
@@ -601,9 +592,9 @@ ISC
 ## Support
 
 - **GitHub Issues**: https://github.com/LennoxSears/morphProtocol/issues
-- **Plugin Docs**: capacitor-plugin/README.md
-- **Demo App Docs**: demo-app/README.md
-- **Android Client Docs**: android-client/README.md
+- **Android Overview**: android/README.md
+- **Plugin Docs**: android/plugin/README.md
+- **Demo App Docs**: android/demo-app/README.md
 
 ## Credits
 

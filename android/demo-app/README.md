@@ -40,7 +40,7 @@ npm install
 ### 2. Build the Plugin
 
 ```bash
-cd ../capacitor-plugin
+cd ../plugin
 npm install
 npm run build
 cd ../demo-app
@@ -267,8 +267,8 @@ Enable Chrome DevTools for Android:
 ## API Reference
 
 See the plugin README for complete API documentation:
-- [Plugin README](../capacitor-plugin/README.md)
-- [Plugin API Definitions](../capacitor-plugin/src/definitions.ts)
+- [Plugin README](../plugin/README.md)
+- [Plugin API Definitions](../plugin/src/definitions.ts)
 
 ## Features Showcase
 
@@ -333,7 +333,7 @@ ISC
 
 For issues and questions:
 - GitHub Issues: https://github.com/LennoxSears/morphProtocol/issues
-- Plugin Documentation: See capacitor-plugin/README.md
+- Plugin Documentation: See ../plugin/README.md
 
 ## Contributing
 
