@@ -22,14 +22,12 @@ export function deterministicBuffer(length: number, seed: number = 0): Buffer {
 
 /**
  * Convert Buffer to ArrayBuffer (proper type)
+ * Must slice the underlying ArrayBuffer to get only the relevant bytes
  */
 export function toArrayBuffer(buffer: Buffer): ArrayBuffer {
-  const ab = new ArrayBuffer(buffer.length);
-  const view = new Uint8Array(ab);
-  for (let i = 0; i < buffer.length; i++) {
-    view[i] = buffer[i];
-  }
-  return ab;
+  // Buffer.buffer returns the entire underlying ArrayBuffer pool
+  // We need to slice it to get only the bytes we want
+  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
 }
 
 /**
@@ -79,3 +77,17 @@ export const TEST_PATTERNS = {
   sequential: deterministicBuffer(256, 0),
   alternating: Buffer.from(Array.from({ length: 256 }, (_, i) => i % 2 === 0 ? 0xAA : 0x55)),
 };
+
+/**
+ * Create deterministic function initializer for testing
+ * Uses fixed values instead of random ones
+ */
+export function createDeterministicFnInitor() {
+  // Create a deterministic substitution table (identity mapping for simplicity)
+  const substitutionTable = Array.from({ length: 256 }, (_, i) => i);
+  
+  return {
+    substitutionTable,
+    randomValue: 42, // Fixed value for testing
+  };
+}

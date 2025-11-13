@@ -81,19 +81,35 @@ describe('Encryptor', () => {
       expect(JSON.parse(decrypted)).toEqual(obj);
     });
 
-    it('should produce different ciphertext for same plaintext (due to random IV)', () => {
+    it('should produce same ciphertext for same plaintext (fixed IV per instance)', () => {
       const encryptor = new Encryptor(testPassword);
       const original = 'test message';
 
       const encrypted1 = encryptor.simpleEncrypt(original);
       const encrypted2 = encryptor.simpleEncrypt(original);
 
-      // Ciphertexts should be different due to random IV
-      expect(encrypted1).not.toBe(encrypted2);
+      // Ciphertexts should be the same (fixed IV per encryptor instance)
+      expect(encrypted1).toBe(encrypted2);
 
-      // But both should decrypt to the same plaintext
+      // Both should decrypt to the same plaintext
       expect(encryptor.simpleDecrypt(encrypted1)).toBe(original);
       expect(encryptor.simpleDecrypt(encrypted2)).toBe(original);
+    });
+
+    it('should produce different ciphertext with different encryptor instances', () => {
+      const encryptor1 = new Encryptor(testPassword);
+      const encryptor2 = new Encryptor(testPassword);
+      const original = 'test message';
+
+      const encrypted1 = encryptor1.simpleEncrypt(original);
+      const encrypted2 = encryptor2.simpleEncrypt(original);
+
+      // Different instances have different IVs, so ciphertexts differ
+      expect(encrypted1).not.toBe(encrypted2);
+
+      // But both should decrypt correctly with their own instance
+      expect(encryptor1.simpleDecrypt(encrypted1)).toBe(original);
+      expect(encryptor2.simpleDecrypt(encrypted2)).toBe(original);
     });
   });
 

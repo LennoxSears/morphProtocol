@@ -1,11 +1,11 @@
 import { Obfuscator } from '../../../src/core/obfuscator';
-import { deterministicBuffer, buffersEqual, TEST_DATA, toArrayBuffer } from '../../helpers/test-utils';
+import { deterministicBuffer, buffersEqual, TEST_DATA, toArrayBuffer, createDeterministicFnInitor } from '../../helpers/test-utils';
 
 describe('Obfuscator', () => {
   const testKey = 123;
   const testLayer = 3;
   const testPadding = 8;
-  const testFnInitor = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110];
+  const testFnInitor = createDeterministicFnInitor(); // Use deterministic initializer for testing
 
   describe('constructor', () => {
     it('should create an obfuscator instance', () => {
@@ -27,7 +27,7 @@ describe('Obfuscator', () => {
       const original = deterministicBuffer(100);
 
       const obfuscated = obfuscator.obfuscation(toArrayBuffer(original));
-      const deobfuscated = obfuscator.deobfuscation(Buffer.from(obfuscated).buffer);
+      const deobfuscated = obfuscator.deobfuscation(toArrayBuffer(Buffer.from(obfuscated)));
 
       expect(buffersEqual(Buffer.from(deobfuscated), original)).toBe(true);
     });
@@ -48,7 +48,7 @@ describe('Obfuscator', () => {
       const original = Buffer.alloc(0);
 
       const obfuscated = obfuscator.obfuscation(toArrayBuffer(original));
-      const deobfuscated = obfuscator.deobfuscation(Buffer.from(obfuscated).buffer);
+      const deobfuscated = obfuscator.deobfuscation(toArrayBuffer(Buffer.from(obfuscated)));
 
       expect(deobfuscated.length).toBe(0);
     });
@@ -58,7 +58,7 @@ describe('Obfuscator', () => {
       const original = TEST_DATA.small;
 
       const obfuscated = obfuscator.obfuscation(toArrayBuffer(original));
-      const deobfuscated = obfuscator.deobfuscation(Buffer.from(obfuscated).buffer);
+      const deobfuscated = obfuscator.deobfuscation(toArrayBuffer(Buffer.from(obfuscated)));
 
       expect(buffersEqual(Buffer.from(deobfuscated), original)).toBe(true);
     });
@@ -68,7 +68,7 @@ describe('Obfuscator', () => {
       const original = TEST_DATA.medium;
 
       const obfuscated = obfuscator.obfuscation(toArrayBuffer(original));
-      const deobfuscated = obfuscator.deobfuscation(Buffer.from(obfuscated).buffer);
+      const deobfuscated = obfuscator.deobfuscation(toArrayBuffer(Buffer.from(obfuscated)));
 
       expect(buffersEqual(Buffer.from(deobfuscated), original)).toBe(true);
     });
@@ -78,7 +78,7 @@ describe('Obfuscator', () => {
       const original = TEST_DATA.large;
 
       const obfuscated = obfuscator.obfuscation(toArrayBuffer(original));
-      const deobfuscated = obfuscator.deobfuscation(Buffer.from(obfuscated).buffer);
+      const deobfuscated = obfuscator.deobfuscation(toArrayBuffer(Buffer.from(obfuscated)));
 
       expect(buffersEqual(Buffer.from(deobfuscated), original)).toBe(true);
     });
@@ -90,7 +90,7 @@ describe('Obfuscator', () => {
       const original = deterministicBuffer(100);
 
       const obfuscated = obfuscator.obfuscation(toArrayBuffer(original));
-      const deobfuscated = obfuscator.deobfuscation(Buffer.from(obfuscated).buffer);
+      const deobfuscated = obfuscator.deobfuscation(toArrayBuffer(Buffer.from(obfuscated)));
 
       expect(buffersEqual(Buffer.from(deobfuscated), original)).toBe(true);
     });
@@ -100,7 +100,7 @@ describe('Obfuscator', () => {
       const original = deterministicBuffer(100);
 
       const obfuscated = obfuscator.obfuscation(toArrayBuffer(original));
-      const deobfuscated = obfuscator.deobfuscation(Buffer.from(obfuscated).buffer);
+      const deobfuscated = obfuscator.deobfuscation(toArrayBuffer(Buffer.from(obfuscated)));
 
       expect(buffersEqual(Buffer.from(deobfuscated), original)).toBe(true);
     });
@@ -110,7 +110,7 @@ describe('Obfuscator', () => {
       const original = deterministicBuffer(100);
 
       const obfuscated = obfuscator.obfuscation(toArrayBuffer(original));
-      const deobfuscated = obfuscator.deobfuscation(Buffer.from(obfuscated).buffer);
+      const deobfuscated = obfuscator.deobfuscation(toArrayBuffer(Buffer.from(obfuscated)));
 
       expect(buffersEqual(Buffer.from(deobfuscated), original)).toBe(true);
     });

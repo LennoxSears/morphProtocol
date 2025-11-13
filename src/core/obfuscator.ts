@@ -150,8 +150,12 @@ export class Obfuscator {
     const { header, body } = this.extractHeaderAndBody(input);
     let fnComboIndex = (header[0] * header[1]) % this.obFunCombosLength;
     let fnCombo = this.functionRegistry.getfunctionPairsIndexCombos();
+    // Convert body to proper ArrayBuffer (slice to avoid pool buffer issue)
+    const bodyBuffer = Buffer.from(body);
+    const bodyArrayBuffer = bodyBuffer.buffer.slice(bodyBuffer.byteOffset, bodyBuffer.byteOffset + bodyBuffer.byteLength);
+    
     let deObfuscatedData = this.preDeobfuscation(
-      Buffer.from(body).buffer,
+      bodyArrayBuffer,
       fnCombo[fnComboIndex].map((it, _idx) => {
         return that.functionRegistry.functionPairs[it];
       })
