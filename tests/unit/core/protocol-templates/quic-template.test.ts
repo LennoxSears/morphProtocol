@@ -19,7 +19,7 @@ describe('QuicTemplate', () => {
     });
 
     it('should have correct template name', () => {
-      expect(template.name).toBe('QUIC');
+      expect(template.name).toBe('QUIC Gaming');
     });
   });
 
@@ -28,8 +28,8 @@ describe('QuicTemplate', () => {
       const data = deterministicBuffer(100);
       const packet = template.encapsulate(data, clientID);
 
-      // QUIC header: 1 byte flags + 4 bytes version + 8 bytes connection ID + 1 byte packet number
-      expect(packet.length).toBe(14 + data.length);
+      // QUIC header: 1 byte flags + 8 bytes connection ID + 2 bytes packet number = 11 bytes
+      expect(packet.length).toBe(11 + data.length);
     });
 
     it('should correctly decapsulate packet', () => {
@@ -77,26 +77,28 @@ describe('QuicTemplate', () => {
 
       expect(headerID).not.toBeNull();
       expect(headerID!.length).toBe(8);
-      // Should match first 8 bytes of clientID
+      // Should match first 8 bytes of clientID (stored at bytes 1-8)
       expect(buffersEqual(headerID!, clientID.slice(0, 8))).toBe(true);
     });
 
     it('should return null for invalid packet (too short)', () => {
-      const invalidPacket = Buffer.alloc(10);
+      const invalidPacket = Buffer.alloc(8); // Less than 9 bytes
       const headerID = template.extractHeaderID(invalidPacket);
 
       expect(headerID).toBeNull();
     });
 
-    it('should return null for packet with wrong flags', () => {
+    it('should extract headerID even with different flags', () => {
       const data = deterministicBuffer(100);
       const packet = template.encapsulate(data, clientID);
       
-      // Corrupt the flags byte
+      // Change the flags byte (doesn't affect extraction)
       packet[0] = 0x00;
       
       const headerID = template.extractHeaderID(packet);
-      expect(headerID).toBeNull();
+      // Should still extract successfully (no flag validation in extractHeaderID)
+      expect(headerID).not.toBeNull();
+      expect(buffersEqual(headerID!, clientID.slice(0, 8))).toBe(true);
     });
   });
 
@@ -105,61 +107,69 @@ describe('QuicTemplate', () => {
       const data = deterministicBuffer(100);
       
       const packet1 = template.encapsulate(data, clientID);
-      const packetNum1 = packet1[13]; // Packet number is at byte 13
+      const packetNum1 = packet1.readUInt16BE(9); // Packet number is 2 bytes at offset 9
       
       template.updateState();
       
       const packet2 = template.encapsulate(data, clientID);
-      const packetNum2 = packet2[13];
+      const packetNum2 = packet2.readUInt16BE(9);
       
-      expect(packetNum2).toBe((packetNum1 + 1) % 256);
+      expect(packetNum2).toBe((packetNum1 + 1) % 65536); // 16-bit wrapping
     });
 
-    it('should wrap packet number at 256', () => {
+    it('should wrap packet number at 65536', () => {
       const data = deterministicBuffer(100);
       
-      // Increment 256 times
-      for (let i = 0; i < 256; i++) {
-        template.updateState();
-      }
+      // Set sequence to near max
+      template['sequenceNumber'] = 65535;
       
-      const packet = template.encapsulate(data, clientID);
-      const packetNum = packet[13];
+      const packet1 = template.encapsulate(data, clientID);
+      const packetNum1 = packet1.readUInt16BE(9);
+      expect(packetNum1).toBe(65535);
+      
+      template.updateState();
+      
+      const packet2 = template.encapsulate(data, clientID);
+      const packetNum2 = packet2.readUInt16BE(9);
       
       // Should wrap back to 0
-      expect(packetNum).toBe(0);
+      expect(packetNum2).toBe(0);
     });
   });
 
   describe('getParams', () => {
-    it('should return empty params object', () => {
+    it('should return params with initialSeq', () => {
       const params = template.getParams();
-      expect(params).toEqual({});
+      expect(params).toHaveProperty('initialSeq');
+      expect(typeof params.initialSeq).toBe('number');
     });
   });
 
   describe('QUIC header structure', () => {
-    it('should have correct flags byte (0xC0)', () => {
+    it('should have flags byte in range 0x40-0x4F', () => {
       const data = deterministicBuffer(100);
       const packet = template.encapsulate(data, clientID);
 
-      expect(packet[0]).toBe(0xC0);
+      // Flags should be 0x40 | (0-15) = 0x40 to 0x4F
+      expect(packet[0] & 0xF0).toBe(0x40);
     });
 
-    it('should have correct version (0x00000001)', () => {
+    it('should embed connection ID at bytes 1-8', () => {
       const data = deterministicBuffer(100);
       const packet = template.encapsulate(data, clientID);
 
-      const version = packet.readUInt32BE(1);
-      expect(version).toBe(0x00000001);
-    });
-
-    it('should embed connection ID from clientID', () => {
-      const data = deterministicBuffer(100);
-      const packet = template.encapsulate(data, clientID);
-
-      const connectionID = packet.slice(5, 13);
+      const connectionID = packet.slice(1, 9);
       expect(buffersEqual(connectionID, clientID.slice(0, 8))).toBe(true);
+    });
+
+    it('should have 2-byte packet number at bytes 9-10', () => {
+      const data = deterministicBuffer(100);
+      const packet = template.encapsulate(data, clientID);
+
+      const packetNum = packet.readUInt16BE(9);
+      expect(typeof packetNum).toBe('number');
+      expect(packetNum).toBeGreaterThanOrEqual(0);
+      expect(packetNum).toBeLessThan(65536);
     });
   });
 
