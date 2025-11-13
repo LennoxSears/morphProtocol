@@ -547,11 +547,11 @@ npx cap sync
 
 ## Platform Support
 
-| Platform | Plugin | Demo App |
-|----------|--------|----------|
-| Android | ✅ Yes | ✅ Yes |
-| iOS | ❌ No | ❌ No |
-| Web | ⚠️ Stub | ⚠️ UI Only |
+| Platform | Plugin | Demo App | Status |
+|----------|--------|----------|--------|
+| Android | ✅ Yes | ✅ Yes | Production ready |
+| iOS | 🟡 Partial | 🟡 Partial | Core components (40%) - See IOS_IMPLEMENTATION_GUIDE.md |
+| Web | ⚠️ Stub | ⚠️ UI Only | Not supported |
 
 ## Future Enhancements
 

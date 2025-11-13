@@ -283,11 +283,13 @@ npx cap sync
 
 ## Platform Support
 
-| Platform | Supported |
-|----------|-----------|
-| Android | ✅ Yes |
-| iOS | ❌ No |
-| Web | ⚠️ Stub only |
+| Platform | Supported | Status |
+|----------|-----------|--------|
+| Android | ✅ Yes | Production ready |
+| iOS | 🟡 Partial | Core components implemented (40%) |
+| Web | ⚠️ Stub only | Returns errors |
+
+See [IOS_IMPLEMENTATION_GUIDE.md](../IOS_IMPLEMENTATION_GUIDE.md) for iOS status and roadmap.
 
 ## License
 
