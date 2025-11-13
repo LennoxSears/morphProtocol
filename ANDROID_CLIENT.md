@@ -1,8 +1,8 @@
-# MorphProtocol Android Client
+# MorphProtocol Android
 
 ## Overview
 
-A complete Kotlin implementation of the MorphProtocol client for Android, fully compatible with the existing TypeScript server. This client provides the same obfuscation, encryption, and protocol features as the TypeScript client.
+Complete Android implementation of MorphProtocol with Capacitor plugin and demo app. The plugin includes a full Kotlin implementation of the MorphProtocol client, fully compatible with the existing TypeScript server.
 
 ## Features
 
@@ -33,62 +33,76 @@ A complete Kotlin implementation of the MorphProtocol client for Android, fully 
 ## Project Structure
 
 ```
-android-client/
-├── src/
-│   ├── main/kotlin/com/morphprotocol/client/
-│   │   ├── crypto/
-│   │   │   └── Encryptor.kt                    # AES-256-CBC encryption
-│   │   ├── core/
-│   │   │   ├── functions/
-│   │   │   │   └── ObfuscationFunction.kt      # 11 obfuscation functions
-│   │   │   ├── FunctionRegistry.kt             # Function management
-│   │   │   ├── FunctionInitializer.kt          # Random parameter generation
-│   │   │   ├── Obfuscator.kt                   # Multi-layer obfuscation engine
-│   │   │   └── templates/
-│   │   │       └── ProtocolTemplate.kt         # QUIC, KCP, Gaming templates
-│   │   ├── network/
-│   │   │   └── MorphUdpClient.kt               # Main UDP client
-│   │   ├── config/
-│   │   │   └── ClientConfig.kt                 # Configuration
-│   │   └── MorphClient.kt                      # Public API facade
-│   └── test/kotlin/                            # Comprehensive test suite
-├── build.gradle.kts                            # Gradle build configuration
-├── README.md                                   # Project documentation
-├── USAGE.md                                    # Usage guide
-└── .gitignore
+android/
+├── plugin/                                     # Capacitor plugin
+│   ├── src/                                    # TypeScript API
+│   │   ├── definitions.ts
+│   │   ├── index.ts
+│   │   └── web.ts
+│   ├── android/src/main/java/com/morphprotocol/
+│   │   ├── client/                             # Kotlin client implementation
+│   │   │   ├── crypto/
+│   │   │   │   └── Encryptor.kt                # AES-256-CBC encryption
+│   │   │   ├── core/
+│   │   │   │   ├── functions/
+│   │   │   │   │   └── ObfuscationFunction.kt  # 11 obfuscation functions
+│   │   │   │   ├── FunctionRegistry.kt         # Function management
+│   │   │   │   ├── FunctionInitializer.kt      # Random parameter generation
+│   │   │   │   ├── Obfuscator.kt               # Multi-layer obfuscation engine
+│   │   │   │   └── templates/
+│   │   │   │       └── ProtocolTemplate.kt     # QUIC, KCP, Gaming templates
+│   │   │   ├── network/
+│   │   │   │   └── MorphUdpClient.kt           # Main UDP client
+│   │   │   ├── config/
+│   │   │   │   └── ClientConfig.kt             # Configuration
+│   │   │   └── MorphClient.kt                  # Public API facade
+│   │   └── capacitor/
+│   │       └── MorphProtocolPlugin.kt          # Capacitor bridge
+│   ├── package.json
+│   └── README.md
+│
+├── demo-app/                                   # Demo Capacitor app
+│   ├── src/
+│   │   ├── App.vue                             # Main UI
+│   │   ├── services/vpn.service.ts             # VPN service
+│   │   └── style.css
+│   ├── capacitor.config.ts
+│   ├── package.json
+│   └── README.md
+│
+└── README.md                                   # Android overview
 ```
 
 ## Quick Start
 
-### 1. Add to Your Project
+### 1. Run Demo App
 
-Copy the `android-client` directory to your project or add as a module.
+```bash
+cd android/demo-app
+npm install
+npm run build
+npx cap sync
+npx cap open android
+```
 
-### 2. Add Dependencies
+### 2. Use Plugin in Your App
 
-```kotlin
-dependencies {
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
-    implementation("com.google.code.gson:gson:2.10.1")
-    implementation("org.bouncycastle:bcprov-jdk15on:1.70")
-}
+```bash
+npm install file:../android/plugin
+npx cap sync
 ```
 
 ### 3. Basic Usage
 
-```kotlin
-import com.morphprotocol.client.MorphClient
-import com.morphprotocol.client.config.ClientConfig
+```typescript
+import { MorphProtocol } from '@morphprotocol/capacitor-plugin';
 
-val config = ClientConfig(
-    remoteAddress = "your.server.com",
-    remotePort = 12301,
-    userId = "user123",
-    encryptionKey = "base64key:base64iv"
-)
-
-val client = MorphClient(config)
-client.start()
+await MorphProtocol.connect({
+  remoteAddress: 'your.server.com',
+  remotePort: 12301,
+  userId: 'user123',
+  encryptionKey: 'base64key:base64iv',
+});
 ```
 
 ## Architecture
