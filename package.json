@@ -14,7 +14,12 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:verbose": "jest --verbose",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "bundle": "esbuild src/server.ts --bundle --platform=node --target=node18 --outfile=dist/server.bundle.js --external:dtrace-provider",
+    "build:exe": "npm run bundle && npm run pkg:all",
+    "pkg:all": "pkg dist/server.bundle.js --targets node18-linux-x64,node18-win-x64 --output bin/morphprotocol-server",
+    "pkg:linux": "pkg dist/server.bundle.js --targets node18-linux-x64 --output bin/morphprotocol-server-linux",
+    "pkg:win": "pkg dist/server.bundle.js --targets node18-win-x64 --output bin/morphprotocol-server-win.exe"
   },
   "keywords": [
     "vpn",
@@ -36,12 +41,24 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^20.11.24",
     "@types/ws": "^8.5.10",
+    "esbuild": "^0.19.0",
     "esrun": "^3.2.26",
     "jest": "^30.2.0",
+    "pkg": "^5.8.1",
     "ts-jest": "^29.4.5",
     "typescript": "^5.7.2"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "pkg": {
+    "assets": [
+      ".env.example",
+      "node_modules/axios/**/*"
+    ],
+    "scripts": [
+      "dist/**/*.js"
+    ],
+    "outputPath": "bin"
   }
 }

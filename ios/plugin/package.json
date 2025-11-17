@@ -7,7 +7,7 @@
   "types": "dist/esm/index.d.ts",
   "unpkg": "dist/plugin.js",
   "files": [
-    "android/",
+    "ios/",
     "dist/",
     "src/"
   ],
@@ -29,8 +29,8 @@
     "obfuscation"
   ],
   "scripts": {
-    "verify": "npm run verify:android",
-    "verify:android": "cd android && ./gradlew clean build test && cd ..",
+    "verify": "npm run verify:ios",
+    "verify:ios": "cd ios && xcodebuild -scheme Plugin -destination 'platform=iOS Simulator,name=iPhone 14' test && cd ..",
     "build": "npm run clean && npm run docgen && tsc && rollup -c rollup.config.js",
     "clean": "rimraf ./dist",
     "watch": "tsc --watch",
@@ -54,8 +54,8 @@
   },
   "prettier": "@ionic/prettier-config",
   "capacitor": {
-    "android": {
-      "src": "android"
+    "ios": {
+      "src": "ios"
     }
   }
 }
