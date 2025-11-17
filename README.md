@@ -50,11 +50,23 @@ Edit `.env` with your settings:
 
 ### Server
 
-Start the UDP server:
+**Option 1: Run with Node.js**
 
 ```bash
 npm run server
 ```
+
+**Option 2: Run standalone executable**
+
+```bash
+# Linux
+./bin/morphprotocol-server-linux
+
+# Windows
+bin\morphprotocol-server-win.exe
+```
+
+The executable will look for a `.env` file in the current directory. Make sure to create one based on `.env.example`.
 
 ### Client
 
@@ -76,6 +88,25 @@ npm run client 192.168.1.100:12301:user123 "base64key:base64iv"
 ```bash
 npm run build
 ```
+
+### Build Standalone Executables
+
+Create standalone executables for Linux and Windows (no Node.js required):
+
+```bash
+# Build both Linux and Windows executables
+npm run build:exe
+
+# Or build individually
+npm run pkg:linux    # Creates bin/morphprotocol-server-linux
+npm run pkg:win      # Creates bin/morphprotocol-server-win.exe
+```
+
+The executables will be created in the `bin/` directory:
+- **Linux**: `bin/morphprotocol-server-linux` (~45MB)
+- **Windows**: `bin/morphprotocol-server-win.exe` (~37MB)
+
+These are self-contained binaries that include the Node.js runtime and all dependencies.
 
 ### Test
 
