@@ -12,6 +12,7 @@ export interface ServerConfig {
   timeoutDuration: number;
   trafficInterval: number;
   heartbeatInterval: number;
+  debugMode: boolean;
   api: {
     subTrafficUrl: string;
     addClientNumUrl: string;
@@ -30,6 +31,7 @@ export interface ClientConfig {
   maxRetries: number;
   heartbeatInterval: number;
   inactivityTimeout: number;
+  debugMode: boolean;
   obfuscation: {
     key: number;
     layer: number;
@@ -48,6 +50,7 @@ export function getServerConfig(): ServerConfig {
     timeoutDuration: Number(process.env.TIMEOUT_DURATION) || 1200000,
     trafficInterval: Number(process.env.TRAFFIC_INTERVAL) || 600000,
     heartbeatInterval: Number(process.env.HEARTBEAT_INTERVAL) || 120000,
+    debugMode: process.env.DEBUG_MODE === 'true',
     api: {
       subTrafficUrl: process.env.SUB_TRAFFIC_URL || '',
       addClientNumUrl: process.env.ADD_CLIENTNUM_URL || '',
@@ -70,6 +73,7 @@ export function getClientConfig(remoteAddress: string): ClientConfig {
     maxRetries: Number(process.env.MAX_RETRIES) || 5,
     heartbeatInterval: Number(process.env.HEARTBEAT_INTERVAL) || 120000,
     inactivityTimeout: Number(process.env.INACTIVITY_TIMEOUT) || 30000,
+    debugMode: process.env.DEBUG_MODE === 'true',
     obfuscation: {
       key: Math.floor(Math.random() * 256),
       layer: Number(process.env.OBFUSCATION_LAYER) || 3,

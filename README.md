@@ -89,6 +89,26 @@ npm run client 192.168.1.100:12301:user123 "base64key:base64iv"
 npm run build
 ```
 
+### Debug Mode
+
+Enable debug mode to verify data integrity through the entire transformation pipeline:
+
+```bash
+# Add to .env
+DEBUG_MODE=true
+
+# Start server and client
+npm run server
+npm run client <server_ip>:<port>:<user_id> <encryption_key>
+```
+
+Debug mode automatically sends test data after handshake and verifies:
+- Protocol template encapsulation/decapsulation
+- Obfuscation/deobfuscation correctness
+- End-to-end data integrity
+
+See [DEBUG.md](DEBUG.md) for detailed documentation.
+
 ### Build Standalone Executables
 
 Create standalone executables for Linux and Windows (no Node.js required):
