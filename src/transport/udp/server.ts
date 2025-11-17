@@ -292,11 +292,21 @@ server.on('message', async (message, remote) => {
         const session = activeSessions.get(clientID);
         if (!session) return;
         
+        logger.debug(`[WG→Client] Received ${wgMessage.length} bytes from WireGuard for client ${clientID}`);
+        
         // Obfuscate data from WireGuard
-        const obfuscatedData = session.obfuscator.obfuscation(Buffer.from(wgMessage).buffer);
+        // Convert Buffer to proper ArrayBuffer (avoid buffer pool issues)
+        const wgBuffer = Buffer.from(wgMessage);
+        const wgArrayBuffer = wgBuffer.buffer.slice(
+          wgBuffer.byteOffset,
+          wgBuffer.byteOffset + wgBuffer.byteLength
+        );
+        const obfuscatedData = session.obfuscator.obfuscation(wgArrayBuffer);
+        logger.debug(`[WG→Client] After obfuscation: ${obfuscatedData.length} bytes`);
         
         // Encapsulate with protocol template
         const packet = session.template.encapsulate(Buffer.from(obfuscatedData), clientIDBuffer);
+        logger.debug(`[WG→Client] After template: ${packet.length} bytes, sending to ${session.remoteAddress}:${session.remotePort}`);
         
         // Update template state
         session.template.updateState();
@@ -304,7 +314,9 @@ server.on('message', async (message, remote) => {
         // Send to client
         newSocket.send(packet, 0, packet.length, session.remotePort, session.remoteAddress, (error) => {
           if (error) {
-            logger.error(`Failed to send data to client ${clientID}`);
+            logger.error(`[WG→Client] Failed to send data to client ${clientID}:`, error);
+          } else {
+            logger.debug(`[WG→Client] Packet sent to client successfully`);
           }
         });
         
@@ -329,7 +341,12 @@ server.on('message', async (message, remote) => {
         // Update last seen
         session.lastSeen = Date.now();
         
+        if (isHeartbeat) {
+          logger.debug(`[Client→WG] Heartbeat received from client ${clientID}`);
+        }
+        
         if (!isHeartbeat) {
+          logger.debug(`[Client→WG] Received ${obfuscatedData.length} bytes from client ${clientID}`);
           // Deobfuscate and forward to WireGuard
           // Create proper ArrayBuffer with exact size (avoid buffer pool issues)
           const obfuscatedBuffer = Buffer.from(obfuscatedData);
@@ -369,18 +386,17 @@ server.on('message', async (message, remote) => {
             }
           }
           
+          logger.debug(`[Client→WG] After deobfuscation: ${deobfuscatedData.length} bytes, sending to WireGuard ${LOCALWG_ADDRESS}:${LOCALWG_PORT}`);
+          
           newSocket.send(deobfuscatedData, 0, deobfuscatedData.length, LOCALWG_PORT, LOCALWG_ADDRESS, (error) => {
             if (error) {
-              logger.error(`Failed to send data to WireGuard for client ${clientID}`);
-            }
-            else {
-              logger.info(`Data sent to LocalWG`);
+              logger.error(`[Client→WG] Failed to send data to WireGuard for client ${clientID}:`, error);
+            } else {
+              logger.debug(`[Client→WG] Packet sent to WireGuard successfully`);
             }
           });
           
           // Note: We only track download traffic (server → client), not upload
-        } else {
-          logger.debug(`Heartbeat received from client ${clientID}`);
         }
       }
     });

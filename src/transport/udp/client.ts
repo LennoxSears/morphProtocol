@@ -341,17 +341,30 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
         }
 
       } else if (remote.address === LOCALWG_ADDRESS && remote.port === LOCALWG_PORT) {
-        sendToNewServer(message);
+        // Received packet from WireGuard - forward to server
+        logger.debug(`[WG→Server] Received ${message.length} bytes from WireGuard`);
+        
+        // Convert Buffer to proper ArrayBuffer (avoid buffer pool issues)
+        const wgBuffer = Buffer.from(message);
+        const wgArrayBuffer = wgBuffer.buffer.slice(
+          wgBuffer.byteOffset,
+          wgBuffer.byteOffset + wgBuffer.byteLength
+        );
+        sendToNewServer(wgArrayBuffer);
       } else if (remote.port === newServerPort) {
         // Update last received time when we get data from server
         lastReceivedTime = Date.now();
         
+        logger.debug(`[Server→WG] Received ${message.length} bytes from server`);
+        
         // Decapsulate template layer
         const obfuscatedData = protocolTemplate.decapsulate(message);
         if (!obfuscatedData) {
-          logger.warn('Failed to decapsulate template packet from server');
+          logger.warn('[Server→WG] Failed to decapsulate template packet from server');
           return;
         }
+        
+        logger.debug(`[Server→WG] After template decapsulation: ${obfuscatedData.length} bytes`);
         
         // Create proper ArrayBuffer with exact size (avoid buffer pool issues)
         const obfuscatedBuffer = Buffer.from(obfuscatedData);
@@ -369,19 +382,22 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
     // Function to send data to the new UDP server
     function sendToNewServer(message: ArrayBuffer) {
       if (newServerPort) {
+        logger.debug(`[WG→Server] Obfuscating ${message.byteLength} bytes`);
         const obfuscatedData = obfuscator.obfuscation(message);
+        logger.debug(`[WG→Server] After obfuscation: ${obfuscatedData.length} bytes`);
         
         // Encapsulate with protocol template
         const packet = protocolTemplate.encapsulate(Buffer.from(obfuscatedData), clientID);
+        logger.debug(`[WG→Server] After template: ${packet.length} bytes, sending to ${HANDSHAKE_SERVER_ADDRESS}:${newServerPort}`);
         
         // Update template state (sequence numbers, etc.)
         protocolTemplate.updateState();
         
         client.send(packet, 0, packet.length, newServerPort, HANDSHAKE_SERVER_ADDRESS, (error: any) => {
           if (error) {
-            logger.error('Failed to send data to new server:', error);
+            logger.error('[WG→Server] Failed to send data to new server:', error);
           } else {
-            logger.info('Data sent to new server');
+            logger.debug('[WG→Server] Packet sent successfully');
           }
         });
       } else {
@@ -389,14 +405,17 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
       }
     }
 
-    // Function to send data to the new UDP server
+    // Function to send data to WireGuard
     function sendToLocalWG(message: ArrayBuffer) {
+      logger.debug(`[Server→WG] Deobfuscating ${message.byteLength} bytes`);
       const deobfuscatedData = obfuscator.deobfuscation(message);
+      logger.debug(`[Server→WG] After deobfuscation: ${deobfuscatedData.length} bytes, sending to WireGuard ${LOCALWG_ADDRESS}:${LOCALWG_PORT}`);
+      
       client.send(deobfuscatedData, 0, deobfuscatedData.length, LOCALWG_PORT, LOCALWG_ADDRESS, (error: any) => {
         if (error) {
-          logger.error('Failed to send data to local-wg server:', error);
+          logger.error('[Server→WG] Failed to send data to WireGuard:', error);
         } else {
-          logger.info('Data sent to local-wg server');
+          logger.debug('[Server→WG] Packet sent to WireGuard successfully');
         }
       });
     }
@@ -484,4 +503,4 @@ export function udpClientStatus(): boolean {
   return clientOpenStatus
 }
 
-startUdpClient('155.138.207.53:12301:f47ac10b-58cc-4372-a567-0e02b2c3d479', 'WAsP4rI7CPqdanJm2ftacD8VgAr5jPasFOdXvZVgZrg=:cx9EgLe36lndE2U6qEv3cw==')
+startUdpClient('155.138.207.53:12301:f47ac10b-58cc-4372-a567-0e02b2c3d479', 'AN6C59lUdohsh84RhndcctYGLCvoDdu4NikWSSxI8cI=:YVJRdgeEReVyinw2xsxctg==')
