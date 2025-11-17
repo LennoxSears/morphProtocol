@@ -45,8 +45,8 @@ export class KcpTemplate extends BaseTemplate {
     // Wnd (2 bytes): window size (simulate 256)
     header.writeUInt16LE(256, 6);
     
-    // Ts (4 bytes): timestamp
-    header.writeUInt32LE(this.timestamp & 0xffffffff, 8);
+    // Ts (4 bytes): timestamp (use >>> 0 to ensure unsigned 32-bit)
+    header.writeUInt32LE((this.timestamp >>> 0), 8);
     
     // Sn (4 bytes): sequence number
     header.writeUInt32LE(this.sequenceNumber, 12);

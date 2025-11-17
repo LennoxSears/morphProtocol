@@ -118,7 +118,7 @@ class KcpTemplate : ProtocolTemplate {
     override val name = "KCP"
     
     private var sequenceNumber = (Math.random() * 4294967296.0).toLong()
-    private var timestamp = System.currentTimeMillis().toInt()
+    private var timestamp = (System.currentTimeMillis() and 0xFFFFFFFFL).toInt()
     
     override fun encapsulate(data: ByteArray, clientID: ByteArray): ByteArray {
         val packet = ByteArray(24 + data.size)
@@ -166,7 +166,7 @@ class KcpTemplate : ProtocolTemplate {
     
     override fun updateState() {
         sequenceNumber++
-        timestamp = System.currentTimeMillis().toInt()
+        timestamp = (System.currentTimeMillis() and 0xFFFFFFFFL).toInt()
     }
     
     override fun getParams(): Map<String, Any> {
