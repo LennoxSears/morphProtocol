@@ -330,8 +330,38 @@ server.on('message', async (message, remote) => {
         session.lastSeen = Date.now();
         
         if (!isHeartbeat) {
+          // DEBUG MODE: Log received data for verification
+          if (config.debugMode && obfuscatedData.length === 256) {
+            logger.info('=== DEBUG MODE: Received test data ===');
+            logger.info(`[DEBUG] After template decapsulation (${obfuscatedData.length} bytes):`);
+            logger.info(`[DEBUG]   First 32 bytes: ${Buffer.from(obfuscatedData).slice(0, 32).toString('hex')}`);
+          }
+          
           // Deobfuscate and forward to WireGuard
           const deobfuscatedData = session.obfuscator.deobfuscation(Buffer.from(obfuscatedData).buffer);
+          
+          // DEBUG MODE: Log final deobfuscated data
+          if (config.debugMode && deobfuscatedData.length === 256) {
+            logger.info(`[DEBUG] After deobfuscation (${deobfuscatedData.length} bytes):`);
+            logger.info(`[DEBUG]   First 32 bytes: ${Buffer.from(deobfuscatedData).slice(0, 32).toString('hex')}`);
+            logger.info(`[DEBUG]   Last 32 bytes: ${Buffer.from(deobfuscatedData).slice(-32).toString('hex')}`);
+            logger.info(`[DEBUG]   Full hex: ${Buffer.from(deobfuscatedData).toString('hex')}`);
+            
+            // Verify data integrity
+            let isValid = true;
+            for (let i = 0; i < 256; i++) {
+              if (deobfuscatedData[i] !== i) {
+                isValid = false;
+                logger.error(`[DEBUG] Data mismatch at byte ${i}: expected ${i}, got ${deobfuscatedData[i]}`);
+                break;
+              }
+            }
+            if (isValid) {
+              logger.info('[DEBUG] ✅ Data integrity verified! All bytes match expected pattern (0x00-0xFF)');
+            } else {
+              logger.error('[DEBUG] ❌ Data integrity check FAILED!');
+            }
+          }
           
           newSocket.send(deobfuscatedData, 0, deobfuscatedData.length, LOCALWG_PORT, LOCALWG_ADDRESS, (error) => {
             if (error) {

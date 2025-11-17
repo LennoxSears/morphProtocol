@@ -53,6 +53,44 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
       protocolTemplate.updateState();
       return packet;
     }
+    
+    // DEBUG: Function to send test data for verification
+    function sendDebugTestData() {
+      logger.info('=== DEBUG MODE: Sending test data ===');
+      
+      // Create test data (256 bytes of pattern)
+      const testData = Buffer.alloc(256);
+      for (let i = 0; i < 256; i++) {
+        testData[i] = i; // 0x00, 0x01, 0x02, ..., 0xFF
+      }
+      
+      logger.info(`[DEBUG] Raw test data (${testData.length} bytes):`);
+      logger.info(`[DEBUG]   First 32 bytes: ${testData.slice(0, 32).toString('hex')}`);
+      logger.info(`[DEBUG]   Last 32 bytes: ${testData.slice(-32).toString('hex')}`);
+      logger.info(`[DEBUG]   Full hex: ${testData.toString('hex')}`);
+      
+      // Obfuscate the data
+      const obfuscatedData = obfuscator.obfuscation(testData.buffer);
+      logger.info(`[DEBUG] After obfuscation (${obfuscatedData.length} bytes):`);
+      logger.info(`[DEBUG]   First 32 bytes: ${Buffer.from(obfuscatedData).slice(0, 32).toString('hex')}`);
+      
+      // Encapsulate with protocol template
+      const packet = protocolTemplate.encapsulate(Buffer.from(obfuscatedData), clientID);
+      logger.info(`[DEBUG] After template encapsulation (${packet.length} bytes):`);
+      logger.info(`[DEBUG]   Template: ${protocolTemplate.name} (ID: ${protocolTemplate.id})`);
+      logger.info(`[DEBUG]   First 32 bytes: ${packet.slice(0, 32).toString('hex')}`);
+      
+      // Send to server
+      client.send(packet, 0, packet.length, newServerPort, HANDSHAKE_SERVER_ADDRESS, (error: any) => {
+        if (error) {
+          logger.error('[DEBUG] Failed to send test data:', error);
+        } else {
+          logger.info('[DEBUG] Test data sent to server successfully');
+        }
+      });
+      
+      protocolTemplate.updateState();
+    }
 
     // Select random protocol template
     const templateId = selectRandomTemplate();
@@ -273,6 +311,13 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
               inactivityCheckInterval = setInterval(checkInactivity, INACTIVITY_CHECK_INTERVAL);
               logger.info(`Inactivity detection started (timeout: ${INACTIVITY_TIMEOUT}ms)`);
               
+              // DEBUG MODE: Send test data after handshake
+              if (config.debugMode) {
+                setTimeout(() => {
+                  sendDebugTestData();
+                }, 1000); // Wait 1 second after handshake
+              }
+              
               resolve(clientPort);
             } else {
               logger.error('Invalid server response - missing port or clientID:', message.toString());
@@ -420,4 +465,4 @@ export function udpClientStatus(): boolean {
   return clientOpenStatus
 }
 
-startUdpClient('155.138.207.53:12301:f47ac10b-58cc-4372-a567-0e02b2c3d479', 'gyHKYTlzdoGk+pUhcxGYXCKp2soqWmG+OZtILdG0Pdo=:aVLzTMiyaJXGhy0ObUiAOg==')
+startUdpClient('127.0.0.1:12301:f47ac10b-58cc-4372-a567-0e02b2c3d479', 'qmvaiCeSl/eCNpdffpvfJNGKbb2mk/0TonxXXidyszQ=:oIo6WkHoZyd7UAKmnfhfKw==')
