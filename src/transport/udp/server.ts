@@ -331,7 +331,13 @@ server.on('message', async (message, remote) => {
         
         if (!isHeartbeat) {
           // Deobfuscate and forward to WireGuard
-          const deobfuscatedData = session.obfuscator.deobfuscation(Buffer.from(obfuscatedData).buffer);
+          // Create proper ArrayBuffer with exact size (avoid buffer pool issues)
+          const obfuscatedBuffer = Buffer.from(obfuscatedData);
+          const obfuscatedArrayBuffer = obfuscatedBuffer.buffer.slice(
+            obfuscatedBuffer.byteOffset,
+            obfuscatedBuffer.byteOffset + obfuscatedBuffer.byteLength
+          );
+          const deobfuscatedData = session.obfuscator.deobfuscation(obfuscatedArrayBuffer);
           
           // DEBUG MODE: Log received data for verification (check AFTER deobfuscation)
           if (config.debugMode && deobfuscatedData.length === 256) {

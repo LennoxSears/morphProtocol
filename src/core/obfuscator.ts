@@ -53,14 +53,17 @@ export class Obfuscator {
   }
 
   private extractHeaderAndBody(input: Uint8Array): { header: Uint8Array; body: Uint8Array } {
+    const paddingLength = input[2];
+    const bodyLength = input.length - 3 - paddingLength;
+    
     const header = new Uint8Array(3);
-    const body = new Uint8Array(input.length - 3 - input[2]);
+    const body = new Uint8Array(bodyLength);
 
     for (let i = 0; i < 3; i++) {
       header[i] = input[i];
     }
 
-    for (let i = 0; i < body.length; i++) {
+    for (let i = 0; i < bodyLength; i++) {
       body[i] = input[i + 3];
     }
 
@@ -150,9 +153,10 @@ export class Obfuscator {
     const { header, body } = this.extractHeaderAndBody(input);
     let fnComboIndex = (header[0] * header[1]) % this.obFunCombosLength;
     let fnCombo = this.functionRegistry.getfunctionPairsIndexCombos();
-    // Convert body to proper ArrayBuffer (slice to avoid pool buffer issue)
-    const bodyBuffer = Buffer.from(body);
-    const bodyArrayBuffer = bodyBuffer.buffer.slice(bodyBuffer.byteOffset, bodyBuffer.byteOffset + bodyBuffer.byteLength);
+    // Convert body to proper ArrayBuffer with exact size
+    // Copy to new ArrayBuffer to avoid buffer pool issues
+    const bodyArrayBuffer = new ArrayBuffer(body.length);
+    new Uint8Array(bodyArrayBuffer).set(body);
     
     let deObfuscatedData = this.preDeobfuscation(
       bodyArrayBuffer,
