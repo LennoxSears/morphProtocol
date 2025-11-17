@@ -56,40 +56,53 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
     
     // DEBUG: Function to send test data for verification
     function sendDebugTestData() {
-      logger.info('=== DEBUG MODE: Sending test data ===');
-      
-      // Create test data (256 bytes of pattern)
-      const testData = Buffer.alloc(256);
-      for (let i = 0; i < 256; i++) {
-        testData[i] = i; // 0x00, 0x01, 0x02, ..., 0xFF
-      }
-      
-      logger.info(`[DEBUG] Raw test data (${testData.length} bytes):`);
-      logger.info(`[DEBUG]   First 32 bytes: ${testData.slice(0, 32).toString('hex')}`);
-      logger.info(`[DEBUG]   Last 32 bytes: ${testData.slice(-32).toString('hex')}`);
-      logger.info(`[DEBUG]   Full hex: ${testData.toString('hex')}`);
-      
-      // Obfuscate the data
-      const obfuscatedData = obfuscator.obfuscation(testData.buffer);
-      logger.info(`[DEBUG] After obfuscation (${obfuscatedData.length} bytes):`);
-      logger.info(`[DEBUG]   First 32 bytes: ${Buffer.from(obfuscatedData).slice(0, 32).toString('hex')}`);
-      
-      // Encapsulate with protocol template
-      const packet = protocolTemplate.encapsulate(Buffer.from(obfuscatedData), clientID);
-      logger.info(`[DEBUG] After template encapsulation (${packet.length} bytes):`);
-      logger.info(`[DEBUG]   Template: ${protocolTemplate.name} (ID: ${protocolTemplate.id})`);
-      logger.info(`[DEBUG]   First 32 bytes: ${packet.slice(0, 32).toString('hex')}`);
-      
-      // Send to server
-      client.send(packet, 0, packet.length, newServerPort, HANDSHAKE_SERVER_ADDRESS, (error: any) => {
-        if (error) {
-          logger.error('[DEBUG] Failed to send test data:', error);
-        } else {
-          logger.info('[DEBUG] Test data sent to server successfully');
+      try {
+        logger.info('=== DEBUG MODE: Sending test data ===');
+        
+        // Verify all required variables are available
+        if (!obfuscator || !protocolTemplate || !clientID || !newServerPort || !client) {
+          logger.error('[DEBUG] Cannot send test data: required variables not initialized');
+          return;
         }
-      });
-      
-      protocolTemplate.updateState();
+        
+        // Create test data (256 bytes of pattern)
+        const testData = Buffer.alloc(256);
+        for (let i = 0; i < 256; i++) {
+          testData[i] = i; // 0x00, 0x01, 0x02, ..., 0xFF
+        }
+        
+        logger.info(`[DEBUG] Raw test data (${testData.length} bytes):`);
+        logger.info(`[DEBUG]   First 32 bytes: ${testData.slice(0, 32).toString('hex')}`);
+        logger.info(`[DEBUG]   Last 32 bytes: ${testData.slice(-32).toString('hex')}`);
+        logger.info(`[DEBUG]   Full hex: ${testData.toString('hex')}`);
+        
+        // Obfuscate the data
+        const obfuscatedData = obfuscator.obfuscation(testData.buffer);
+        logger.info(`[DEBUG] After obfuscation (${obfuscatedData.length} bytes):`);
+        logger.info(`[DEBUG]   Obfuscation adds: 3-byte header + ${obfuscatedData.length - 256 - 3} bytes padding`);
+        logger.info(`[DEBUG]   First 32 bytes: ${Buffer.from(obfuscatedData).slice(0, 32).toString('hex')}`);
+        
+        // Encapsulate with protocol template
+        const packet = protocolTemplate.encapsulate(Buffer.from(obfuscatedData), clientID);
+        const templateOverhead = packet.length - obfuscatedData.length;
+        logger.info(`[DEBUG] After template encapsulation (${packet.length} bytes):`);
+        logger.info(`[DEBUG]   Template: ${protocolTemplate.name} (ID: ${protocolTemplate.id})`);
+        logger.info(`[DEBUG]   Template overhead: ${templateOverhead} bytes`);
+        logger.info(`[DEBUG]   First 32 bytes: ${packet.slice(0, 32).toString('hex')}`);
+        
+        // Send to server
+        client.send(packet, 0, packet.length, newServerPort, HANDSHAKE_SERVER_ADDRESS, (error: any) => {
+          if (error) {
+            logger.error('[DEBUG] Failed to send test data:', error);
+          } else {
+            logger.info('[DEBUG] Test data sent to server successfully');
+          }
+        });
+        
+        protocolTemplate.updateState();
+      } catch (error: any) {
+        logger.error('[DEBUG] Error in sendDebugTestData:', error.message);
+      }
     }
 
     // Select random protocol template
