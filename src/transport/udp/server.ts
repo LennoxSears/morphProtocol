@@ -330,15 +330,15 @@ server.on('message', async (message, remote) => {
         session.lastSeen = Date.now();
         
         if (!isHeartbeat) {
-          // DEBUG MODE: Log received data for verification
-          if (config.debugMode && obfuscatedData.length === 256) {
+          // Deobfuscate and forward to WireGuard
+          const deobfuscatedData = session.obfuscator.deobfuscation(Buffer.from(obfuscatedData).buffer);
+          
+          // DEBUG MODE: Log received data for verification (check AFTER deobfuscation)
+          if (config.debugMode && deobfuscatedData.length === 256) {
             logger.info('=== DEBUG MODE: Received test data ===');
             logger.info(`[DEBUG] After template decapsulation (${obfuscatedData.length} bytes):`);
             logger.info(`[DEBUG]   First 32 bytes: ${Buffer.from(obfuscatedData).slice(0, 32).toString('hex')}`);
           }
-          
-          // Deobfuscate and forward to WireGuard
-          const deobfuscatedData = session.obfuscator.deobfuscation(Buffer.from(obfuscatedData).buffer);
           
           // DEBUG MODE: Log final deobfuscated data
           if (config.debugMode && deobfuscatedData.length === 256) {
