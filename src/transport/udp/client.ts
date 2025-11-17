@@ -353,7 +353,13 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
           return;
         }
         
-        sendToLocalWG(Buffer.from(obfuscatedData).buffer);
+        // Create proper ArrayBuffer with exact size (avoid buffer pool issues)
+        const obfuscatedBuffer = Buffer.from(obfuscatedData);
+        const obfuscatedArrayBuffer = obfuscatedBuffer.buffer.slice(
+          obfuscatedBuffer.byteOffset,
+          obfuscatedBuffer.byteOffset + obfuscatedBuffer.byteLength
+        );
+        sendToLocalWG(obfuscatedArrayBuffer);
       } else {
         // Message received from unknown server
         logger.info(`Received data from unknown server: ${remote.address}:${remote.port}`);
