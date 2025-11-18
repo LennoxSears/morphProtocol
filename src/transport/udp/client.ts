@@ -22,6 +22,7 @@ let clientID: Buffer; // 16 bytes binary
 let lastReceivedTime: number = 0; // Track last packet from server
 let newServerPort: number; // Store the port of the new server
 let protocolTemplate: ProtocolTemplate; // Protocol template for packet encapsulation
+let clientPort: number = 0; // Store client port for reuse on reconnection
 
 export function startUdpClient(remoteAddress: string, encryptionKey: string): Promise<number> {
   return new Promise<number>((resolve, reject) => {
@@ -90,7 +91,9 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
     if (inactivityCheckInterval) {
       clearInterval(inactivityCheckInterval);
     }
-    if (client && clientOpenStatus) {
+    // On reconnection, don't close the socket - reuse it to keep the same port
+    if (client && clientOpenStatus && clientPort === 0) {
+      // Only close on first connection cleanup
       let msgClose = encryptor.simpleEncrypt('close');
       client.send(msgClose, 0, msgClose.length, HANDSHAKE_SERVER_PORT, HANDSHAKE_SERVER_ADDRESS, (error: any) => {
         if (error) {
@@ -101,9 +104,13 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
       });
       client.close()
     }
-    // Create a UDP client socket
-    client = dgram.createSocket('udp4');
-    let clientPort: number
+    
+    // Create a UDP client socket (or reuse existing on reconnection)
+    if (!client || clientPort === 0) {
+      client = dgram.createSocket('udp4');
+    } else {
+      logger.info('Reusing existing socket for reconnection');
+    }
     let clientRetry = 0
 
     // Function to check for inactivity and reconnect
@@ -369,10 +376,23 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
     client.on('close', () => {
       clientOpenStatus = false
     })
-    // Bind the socket to a specific port
-    client.bind(() => {
-      clientPort = client.address().port;
-      logger.info(`Client socket bound to port ${clientPort}`);
+    // Bind the socket to a specific port (reuse port on reconnection)
+    if (clientPort === 0) {
+      // First connection - bind to any available port
+      client.bind(() => {
+        clientPort = client.address().port;
+        logger.info(`Client socket bound to port ${clientPort} (will reuse on reconnection)`);
+        startHandshake();
+      });
+    } else {
+      // Reconnection - reuse the same port
+      client.bind(clientPort, () => {
+        logger.info(`Client socket rebound to port ${clientPort} (reused from previous connection)`);
+        startHandshake();
+      });
+    }
+    
+    function startHandshake() {
 
       // Send handshake data initially
       sendHandshakeData();
@@ -395,7 +415,7 @@ export function startUdpClient(remoteAddress: string, encryptionKey: string): Pr
           reject("max_retries")
         }
       }, 5000);
-    });
+    }
   });
 }
 
