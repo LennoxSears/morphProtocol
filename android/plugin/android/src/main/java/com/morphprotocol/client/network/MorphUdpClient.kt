@@ -112,7 +112,7 @@ class MorphUdpClient(private val config: ClientConfig) {
             return@withContext ConnectionResult(
                 success = true,
                 serverPort = newServerPort,
-                clientId = clientId.toHex(),
+                clientId = clientID.toHex(),
                 message = "Connected successfully"
             )
         } catch (e: Exception) {
