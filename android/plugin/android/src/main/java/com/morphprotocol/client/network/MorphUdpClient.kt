@@ -200,7 +200,7 @@ class MorphUdpClient(private val config: ClientConfig) {
      * Check for inactivity and reconnect if needed.
      */
     private fun checkInactivity() {
-        if (newServerPort == 0 || lastReceivedTime == 0) {
+        if (newServerPort == 0 || lastReceivedTime == 0L) {
             return
         }
         

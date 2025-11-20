@@ -150,7 +150,7 @@ class BitwiseNOT : ObfuscationFunction {
     override fun obfuscate(input: ByteArray, keyArray: ByteArray, initor: Any?): ByteArray {
         val output = ByteArray(input.size)
         for (i in input.indices) {
-            output[i] = input[i].inv()
+            output[i] = input[i].toInt().inv().toByte()
         }
         return output
     }

@@ -39,15 +39,15 @@ class MorphProtocolPlugin : Plugin() {
                 ?: return call.reject("encryptionKey is required")
 
             // Optional parameters with defaults
-            val localWgAddress = call.getString("localWgAddress", "127.0.0.1")
-            val localWgPort = call.getInt("localWgPort", 51820)
-            val obfuscationLayer = call.getInt("obfuscationLayer", 3)
-            val paddingLength = call.getInt("paddingLength", 8)
-            val heartbeatInterval = call.getLong("heartbeatInterval", 120000L)
-            val inactivityTimeout = call.getLong("inactivityTimeout", 30000L)
-            val maxRetries = call.getInt("maxRetries", 10)
-            val handshakeInterval = call.getLong("handshakeInterval", 5000L)
-            val password = call.getString("password", "bumoyu123")
+            val localWgAddress = call.getString("localWgAddress") ?: "127.0.0.1"
+            val localWgPort = call.getInt("localWgPort") ?: 51820
+            val obfuscationLayer = call.getInt("obfuscationLayer") ?: 3
+            val paddingLength = call.getInt("paddingLength") ?: 8
+            val heartbeatInterval = call.getLong("heartbeatInterval") ?: 120000L
+            val inactivityTimeout = call.getLong("inactivityTimeout") ?: 30000L
+            val maxRetries = call.getInt("maxRetries") ?: 10
+            val handshakeInterval = call.getLong("handshakeInterval") ?: 5000L
+            val password = call.getString("password") ?: "bumoyu123"
 
             // Create configuration
             val config = ClientConfig (
