@@ -76,12 +76,12 @@ export interface ConnectionOptions {
   paddingLength?: number;
 
   /**
-   * Heartbeat interval in milliseconds (default: 120000)
+   * Heartbeat interval in milliseconds (default: 30000)
    */
   heartbeatInterval?: number;
 
   /**
-   * Inactivity timeout in milliseconds (default: 30000)
+   * Inactivity timeout in milliseconds (default: 180000)
    */
   inactivityTimeout?: number;
 
@@ -116,6 +116,11 @@ export interface ConnectionResult {
    * Client ID (hex string)
    */
   clientId?: string;
+
+  /**
+   * Server port assigned by the server
+   */
+  serverPort?: number;
 }
 
 export interface DisconnectionResult {

@@ -43,8 +43,8 @@ class MorphProtocolPlugin : Plugin() {
             val localWgPort = call.getInt("localWgPort") ?: 51820
             val obfuscationLayer = call.getInt("obfuscationLayer") ?: 3
             val paddingLength = call.getInt("paddingLength") ?: 8
-            val heartbeatInterval = call.getLong("heartbeatInterval") ?: 120000L
-            val inactivityTimeout = call.getLong("inactivityTimeout") ?: 30000L
+            val heartbeatInterval = call.getLong("heartbeatInterval") ?: 30000L
+            val inactivityTimeout = call.getLong("inactivityTimeout") ?: 180000L
             val maxRetries = call.getInt("maxRetries") ?: 10
             val handshakeInterval = call.getLong("handshakeInterval") ?: 5000L
             val password = call.getString("password") ?: "bumoyu123"
@@ -71,21 +71,39 @@ class MorphProtocolPlugin : Plugin() {
 
             scope.launch {
                 try {
-                    morphClient?.startAsync()
-                    isConnected = true
+                    val connectionResult = morphClient?.startAsync()
+                    
+                    if (connectionResult?.success == true) {
+                        isConnected = true
+                        clientId = connectionResult.clientId
+                        serverPort = connectionResult.serverPort
 
-                    // Notify listeners
-                    val event = JSObject()
-                    event.put("type", "connected")
-                    event.put("message", "Connected to MorphProtocol server")
-                    notifyListeners("connected", event)
+                        // Notify listeners
+                        val event = JSObject()
+                        event.put("type", "connected")
+                        event.put("message", connectionResult.message)
+                        event.put("serverPort", connectionResult.serverPort)
+                        notifyListeners("connected", event)
 
-                    // Return success
-                    val result = JSObject()
-                    result.put("success", true)
-                    result.put("message", "Connected successfully")
-                    result.put("clientId", clientId)
-                    call.resolve(result)
+                        // Return success
+                        val result = JSObject()
+                        result.put("success", true)
+                        result.put("message", connectionResult.message)
+                        result.put("clientId", connectionResult.clientId)
+                        result.put("serverPort", connectionResult.serverPort)
+                        call.resolve(result)
+                    } else {
+                        isConnected = false
+                        morphClient = null
+
+                        // Notify listeners
+                        val event = JSObject()
+                        event.put("type", "error")
+                        event.put("message", connectionResult?.message ?: "Connection failed")
+                        notifyListeners("error", event)
+
+                        call.reject(connectionResult?.message ?: "Connection failed")
+                    }
                 } catch (e: Exception) {
                     isConnected = false
                     morphClient = null

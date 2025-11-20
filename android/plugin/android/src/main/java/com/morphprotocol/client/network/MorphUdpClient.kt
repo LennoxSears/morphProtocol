@@ -1,6 +1,7 @@
 package com.morphprotocol.client.network
 
 import com.google.gson.Gson
+import com.morphprotocol.client.ConnectionResult
 import com.morphprotocol.client.config.ClientConfig
 import com.morphprotocol.client.core.FunctionInitializer
 import com.morphprotocol.client.core.Obfuscator
@@ -65,24 +66,64 @@ class MorphUdpClient(private val config: ClientConfig) {
     /**
      * Start the UDP client.
      */
-    suspend fun start() = withContext(Dispatchers.IO) {
+    suspend fun start(): ConnectionResult = withContext(Dispatchers.IO) {
         if (isRunning) {
             println("Client already running")
-            return@withContext
+            return@withContext ConnectionResult(
+                success = false,
+                message = "Client already running"
+            )
         }
         
-        isRunning = true
-        socket = DatagramSocket()
-        val localPort = socket!!.localPort
-        println("Client socket bound to port $localPort")
-        
-        // Start receiving packets
-        receiveJob = scope.launch {
-            receivePackets()
+        try {
+            isRunning = true
+            socket = DatagramSocket()
+            val localPort = socket!!.localPort
+            println("Client socket bound to port $localPort")
+            
+            // Start receiving packets
+            receiveJob = scope.launch {
+                receivePackets()
+            }
+            
+            // Start handshake and wait for connection
+            startHandshake()
+            
+            // Wait for handshake to complete (with timeout)
+            val startTime = System.currentTimeMillis()
+            val timeout = config.maxRetries * config.handshakeInterval
+            
+            while (newServerPort == 0 && System.currentTimeMillis() - startTime < timeout) {
+                delay(100)
+            }
+            
+            if (newServerPort == 0) {
+                // Handshake failed
+                isRunning = false
+                socket?.close()
+                socket = null
+                return@withContext ConnectionResult(
+                    success = false,
+                    message = "Connection failed: Handshake timeout"
+                )
+            }
+            
+            // Connection successful
+            return@withContext ConnectionResult(
+                success = true,
+                serverPort = newServerPort,
+                clientId = clientId.toHex(),
+                message = "Connected successfully"
+            )
+        } catch (e: Exception) {
+            isRunning = false
+            socket?.close()
+            socket = null
+            return@withContext ConnectionResult(
+                success = false,
+                message = "Connection failed: ${e.message}"
+            )
         }
-        
-        // Start handshake
-        startHandshake()
     }
     
     /**

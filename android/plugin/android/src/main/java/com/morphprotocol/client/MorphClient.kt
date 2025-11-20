@@ -5,6 +5,16 @@ import com.morphprotocol.client.network.MorphUdpClient
 import kotlinx.coroutines.runBlocking
 
 /**
+ * Connection result data class.
+ */
+data class ConnectionResult(
+    val success: Boolean,
+    val serverPort: Int = 0,
+    val clientId: String = "",
+    val message: String = ""
+)
+
+/**
  * Main MorphProtocol client facade.
  * Provides a simple API for starting and stopping the client.
  */
@@ -14,15 +24,15 @@ class MorphClient(private val config: ClientConfig) {
     /**
      * Start the client (blocking).
      */
-    fun start() = runBlocking {
+    fun start(): ConnectionResult = runBlocking {
         udpClient.start()
     }
     
     /**
      * Start the client (suspending).
      */
-    suspend fun startAsync() {
-        udpClient.start()
+    suspend fun startAsync(): ConnectionResult {
+        return udpClient.start()
     }
     
     /**
