@@ -15,6 +15,8 @@ import java.net.DatagramSocket
 import java.net.InetAddress
 import java.security.SecureRandom
 import java.util.Base64
+import java.util.Timer
+import java.util.TimerTask
 import kotlin.random.Random
 
 /**
@@ -35,11 +37,13 @@ class MorphUdpClient(private val config: ClientConfig) {
     private var lastReceivedTime: Long = 0
     
     private var handshakeJob: Job? = null
-    private var heartbeatJob: Job? = null
-    private var inactivityCheckJob: Job? = null
     private var receiveJob: Job? = null
     
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    
+    // Use java.util.Timer for background execution (not affected by Doze mode)
+    private var heartbeatTimer: Timer? = null
+    private var inactivityCheckTimer: Timer? = null
     
     init {
         // Generate random 16-byte clientID
@@ -136,10 +140,12 @@ class MorphUdpClient(private val config: ClientConfig) {
         
         isRunning = false
         
+        // Stop timers
+        stopHeartbeat()
+        stopInactivityCheck()
+        
         // Cancel all jobs
         handshakeJob?.cancel()
-        heartbeatJob?.cancel()
-        inactivityCheckJob?.cancel()
         receiveJob?.cancel()
         
         // Send close message
@@ -202,21 +208,36 @@ class MorphUdpClient(private val config: ClientConfig) {
     }
     
     /**
-     * Start heartbeat mechanism.
+     * Start heartbeat mechanism using java.util.Timer (not affected by Doze mode).
      */
     private fun startHeartbeat() {
-        heartbeatJob = scope.launch {
-            while (isRunning && newServerPort != 0) {
-                sendHeartbeat()
-                delay(config.heartbeatInterval)
-            }
+        println("Starting heartbeat timer with interval: ${config.heartbeatInterval}ms")
+        heartbeatTimer = Timer("HeartbeatTimer", true).apply {
+            schedule(object : TimerTask() {
+                override fun run() {
+                    if (isRunning && newServerPort != 0) {
+                        sendHeartbeat()
+                    }
+                }
+            }, 0, config.heartbeatInterval)
         }
+    }
+    
+    /**
+     * Stop heartbeat timer.
+     */
+    private fun stopHeartbeat() {
+        heartbeatTimer?.cancel()
+        heartbeatTimer = null
     }
     
     /**
      * Send heartbeat to server.
      */
     private fun sendHeartbeat() {
+        val timestamp = System.currentTimeMillis()
+        println("[$timestamp] Sending heartbeat (Timer-based, Doze-resistant)")
+        
         val heartbeatMarker = byteArrayOf(0x01)
         val packet = protocolTemplate.encapsulate(heartbeatMarker, clientID)
         protocolTemplate.updateState()
@@ -226,21 +247,35 @@ class MorphUdpClient(private val config: ClientConfig) {
     }
     
     /**
-     * Start inactivity check.
+     * Start inactivity check using java.util.Timer (not affected by Doze mode).
      */
     private fun startInactivityCheck() {
-        inactivityCheckJob = scope.launch {
-            while (isRunning && newServerPort != 0) {
-                delay(10000) // Check every 10 seconds
-                checkInactivity()
-            }
+        println("Starting inactivity check timer")
+        inactivityCheckTimer = Timer("InactivityCheckTimer", true).apply {
+            schedule(object : TimerTask() {
+                override fun run() {
+                    if (isRunning && newServerPort != 0) {
+                        checkInactivity()
+                    }
+                }
+            }, 10000, 10000) // Check every 10 seconds
         }
+    }
+    
+    /**
+     * Stop inactivity check timer.
+     */
+    private fun stopInactivityCheck() {
+        inactivityCheckTimer?.cancel()
+        inactivityCheckTimer = null
     }
     
     /**
      * Check for inactivity and reconnect if needed.
      */
     private fun checkInactivity() {
+        val timestamp = System.currentTimeMillis()
+        println("[$timestamp] Checking inactivity (Timer-based, Doze-resistant)")
         if (newServerPort == 0 || lastReceivedTime == 0L) {
             return
         }

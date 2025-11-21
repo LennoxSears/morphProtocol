@@ -5,7 +5,9 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -13,8 +15,9 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.Message
 import android.os.Messenger
-import android.os.RemoteException
 import android.os.PowerManager
+import android.os.RemoteException
+import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.morphprotocol.client.ConnectionResult
@@ -94,6 +97,23 @@ class MorphProtocolService : Service() {
         
         // Acquire wake lock to prevent CPU sleep
         acquireWakeLock()
+        
+        // Check if battery optimization is disabled
+        checkBatteryOptimization()
+    }
+    
+    private fun checkBatteryOptimization() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            val packageName = packageName
+            
+            if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                Log.w(TAG, "Battery optimization is enabled - this may affect background execution")
+                Log.w(TAG, "Consider requesting REQUEST_IGNORE_BATTERY_OPTIMIZATIONS permission")
+            } else {
+                Log.d(TAG, "Battery optimization is disabled - good for background execution")
+            }
+        }
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
