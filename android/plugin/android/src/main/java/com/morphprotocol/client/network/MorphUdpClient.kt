@@ -344,21 +344,27 @@ class MorphUdpClient(private val config: ClientConfig) {
      * Handle incoming packet.
      */
     private fun handleIncomingPacket(data: ByteArray, remoteAddress: InetAddress, remotePort: Int) {
+        val timestamp = System.currentTimeMillis()
+        println("[$timestamp] [PacketRouter] Received ${data.size} bytes from ${remoteAddress.hostAddress}:$remotePort")
+        
         when {
             remotePort == config.remotePort -> {
                 // Message from handshake server
+                println("[$timestamp] [PacketRouter] → Handshake response")
                 handleHandshakeResponse(data)
             }
-            remoteAddress.hostAddress == config.localWgAddress && remotePort == config.localWgPort -> {
-                // Message from local WireGuard
+            remotePort == config.localWgPort -> {
+                // Message from local WireGuard (check port only, not address)
+                println("[$timestamp] [PacketRouter] → From WireGuard, sending to server")
                 handleWireGuardPacket(data)
             }
             remotePort == newServerPort -> {
                 // Message from new server
+                println("[$timestamp] [PacketRouter] → From server, sending to WireGuard")
                 handleServerPacket(data)
             }
             else -> {
-                println("Received data from unknown server: ${remoteAddress.hostAddress}:$remotePort")
+                println("[$timestamp] [PacketRouter] → Unknown source (port: $remotePort), ignoring")
             }
         }
     }
