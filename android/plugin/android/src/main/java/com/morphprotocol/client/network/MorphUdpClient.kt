@@ -43,11 +43,8 @@ class MorphUdpClient(
     private var newServerPort: Int = 0
     private var lastReceivedTime: Long = 0
     
-    // Use native Java threads instead of coroutines (not affected by Doze mode)
-    private var receiveThread: Thread? = null
-    private var handshakeThread: Thread? = null
-    
-    // Use java.util.Timer (works with native threads)
+    // Use java.util.Timer (works with native threads, not affected by Doze mode)
+    private var handshakeTimer: java.util.Timer? = null
     private var heartbeatTimer: java.util.Timer? = null
     private var inactivityCheckTimer: java.util.Timer? = null
     
@@ -75,7 +72,8 @@ class MorphUdpClient(
     
     /**
      * Start the UDP client.
-     * Runs synchronously, blocking until connection established or timeout.
+     * Runs in the calling thread (like old plugin).
+     * This function blocks and runs the receive loop.
      */
     fun start(): ConnectionResult {
         if (isRunning) {
@@ -92,42 +90,19 @@ class MorphUdpClient(
             val localPort = socket!!.localPort
             Log.d(TAG, "Client socket bound to port $localPort")
             
-            // Start receiving packets in a native Java thread (Doze-resistant)
-            receiveThread = Thread {
-                receivePackets()
-            }.apply {
-                name = "MorphUDP-Receive"
-                start()
-            }
-            
-            // Start handshake and wait for connection
+            // Start handshake timer (like old plugin)
             startHandshake()
             
-            // Wait for handshake to complete (with timeout)
-            val startTime = System.currentTimeMillis()
-            val timeout = config.maxRetries * config.handshakeInterval
+            // Run receive loop in THIS thread (like old plugin)
+            // This blocks until stop() is called
+            receivePackets()
             
-            while (newServerPort == 0 && System.currentTimeMillis() - startTime < timeout) {
-                Thread.sleep(100)  // Use Thread.sleep instead of delay
-            }
-            
-            if (newServerPort == 0) {
-                // Handshake failed
-                isRunning = false
-                socket?.close()
-                socket = null
-                return ConnectionResult(
-                    success = false,
-                    message = "Connection failed: Handshake timeout"
-                )
-            }
-            
-            // Connection successful
+            // If we get here, connection was stopped
             return ConnectionResult(
                 success = true,
                 serverPort = newServerPort,
                 clientId = clientID.toHex(),
-                message = "Connected successfully"
+                message = if (newServerPort > 0) "Connected successfully" else "Connection stopped"
             )
         } catch (e: Exception) {
             isRunning = false
@@ -151,58 +126,61 @@ class MorphUdpClient(
         isRunning = false
         
         // Stop timers
+        stopHandshake()
         stopHeartbeat()
         stopInactivityCheck()
-        
-        // Stop threads
-        receiveThread?.interrupt()
-        receiveThread = null
-        handshakeThread?.interrupt()
-        handshakeThread = null
         
         // Send close message
         try {
             val closeMsg = encryptor.simpleEncrypt("close")
             sendToHandshakeServer(closeMsg.toByteArray())
-            println("Close message sent to handshake server")
+            Log.d(TAG, "Close message sent to handshake server")
         } catch (e: Exception) {
-            println("Failed to send close message: ${e.message}")
+            Log.e(TAG, "Failed to send close message: ${e.message}")
         }
         
-        // Close socket
+        // Close socket (this will break the receive loop)
         socket?.close()
         socket = null
         
-        println("Client stopped")
+        Log.d(TAG, "Client stopped")
     }
     
     /**
-     * Start handshake process using native thread (Doze-resistant).
+     * Start handshake process using Timer (like old plugin).
      */
     private fun startHandshake() {
-        handshakeThread = Thread {
-            var retryCount = 0
-            
-            while (isRunning && newServerPort == 0 && retryCount < config.maxRetries) {
-                sendHandshake()
-                retryCount++
-                
-                try {
-                    Thread.sleep(config.handshakeInterval)
-                } catch (e: InterruptedException) {
-                    Log.d(TAG, "Handshake thread interrupted")
-                    break
+        Log.d(TAG, "Starting handshake timer")
+        var retryCount = 0
+        
+        handshakeTimer = java.util.Timer("MorphHandshake", true).apply {
+            schedule(object : java.util.TimerTask() {
+                override fun run() {
+                    if (!isRunning || newServerPort != 0) {
+                        cancel()
+                        return
+                    }
+                    
+                    sendHandshake()
+                    retryCount++
+                    
+                    if (retryCount >= config.maxRetries) {
+                        Log.e(TAG, "Max retries reached, handshake failed")
+                        cancel()
+                        stop()
+                    }
                 }
-            }
-            
-            if (retryCount >= config.maxRetries && newServerPort == 0) {
-                Log.e(TAG, "Max retries reached, handshake failed")
-                isRunning = false
-            }
-        }.apply {
-            name = "MorphUDP-Handshake"
-            start()
+            }, 0, config.handshakeInterval)
         }
+    }
+    
+    /**
+     * Stop handshake timer.
+     */
+    private fun stopHandshake() {
+        Log.d(TAG, "Stopping handshake")
+        handshakeTimer?.cancel()
+        handshakeTimer = null
     }
     
     /**
@@ -453,8 +431,7 @@ class MorphUdpClient(
                         }
                         
                         // Stop handshake and start heartbeat
-                        handshakeThread?.interrupt()
-                        handshakeThread = null
+                        stopHandshake()
                         startHeartbeat()
                         
                         // Start inactivity check
