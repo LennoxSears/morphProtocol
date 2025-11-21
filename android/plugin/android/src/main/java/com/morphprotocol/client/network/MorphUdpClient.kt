@@ -353,8 +353,8 @@ class MorphUdpClient(private val config: ClientConfig) {
                 println("[$timestamp] [PacketRouter] → Handshake response")
                 handleHandshakeResponse(data)
             }
-            remotePort == config.localWgPort -> {
-                // Message from local WireGuard (check port only, not address)
+            isLocalAddress(remoteAddress) && remotePort == config.localWgPort -> {
+                // Message from local WireGuard (check both address and port for security)
                 println("[$timestamp] [PacketRouter] → From WireGuard, sending to server")
                 handleWireGuardPacket(data)
             }
@@ -366,6 +366,25 @@ class MorphUdpClient(private val config: ClientConfig) {
             else -> {
                 println("[$timestamp] [PacketRouter] → Unknown source (port: $remotePort), ignoring")
             }
+        }
+    }
+    
+    /**
+     * Check if address is localhost (handles various formats).
+     */
+    private fun isLocalAddress(address: InetAddress): Boolean {
+        // Check if it's loopback address (handles both IPv4 and IPv6)
+        if (address.isLoopbackAddress) {
+            return true
+        }
+        
+        // Also check against configured local address
+        try {
+            val configAddress = InetAddress.getByName(config.localWgAddress)
+            return address == configAddress
+        } catch (e: Exception) {
+            println("Failed to resolve local address: ${e.message}")
+            return false
         }
     }
     
