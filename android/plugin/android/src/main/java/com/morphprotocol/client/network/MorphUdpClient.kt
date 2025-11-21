@@ -260,7 +260,7 @@ class MorphUdpClient(
                         checkInactivity()
                     }
                 }
-            }, 10000, 10000) // Check every 10 seconds
+            }, 90000, 90000) // Check every 90 seconds
         }
     }
     
