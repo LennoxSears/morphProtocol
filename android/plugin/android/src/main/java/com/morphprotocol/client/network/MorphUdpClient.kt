@@ -151,10 +151,11 @@ class MorphUdpClient(
      */
     private fun startHandshake() {
         Log.d(TAG, "Starting handshake timer")
-        var retryCount = 0
         
         handshakeTimer = java.util.Timer("MorphHandshake", true).apply {
             schedule(object : java.util.TimerTask() {
+                private var retryCount = 0  // Inside TimerTask like old plugin
+                
                 override fun run() {
                     if (!isRunning || newServerPort != 0) {
                         cancel()
