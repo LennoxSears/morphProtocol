@@ -1,6 +1,13 @@
 package com.morphprotocol.client.network
 
+import android.app.AlarmManager
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import com.google.gson.Gson
 import com.morphprotocol.client.ConnectionResult
@@ -30,6 +37,8 @@ class MorphUdpClient(
 ) {
     companion object {
         private const val TAG = "MorphUdpClient"
+        private const val ACTION_HEARTBEAT = "com.morphprotocol.HEARTBEAT"
+        private const val ACTION_INACTIVITY_CHECK = "com.morphprotocol.INACTIVITY_CHECK"
     }
     private val gson = Gson()
     private val random = SecureRandom()
@@ -43,10 +52,36 @@ class MorphUdpClient(
     private var newServerPort: Int = 0
     private var lastReceivedTime: Long = 0
     
-    // Use java.util.Timer (works with native threads, not affected by Doze mode)
+    // Use java.util.Timer for handshake (short-term, acceptable)
     private var handshakeTimer: java.util.Timer? = null
-    private var heartbeatTimer: java.util.Timer? = null
-    private var inactivityCheckTimer: java.util.Timer? = null
+    
+    // Use AlarmManager for heartbeat and inactivity (Doze-resistant)
+    private val alarmManager: AlarmManager by lazy {
+        context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    }
+    private var heartbeatPendingIntent: PendingIntent? = null
+    private var inactivityCheckPendingIntent: PendingIntent? = null
+    
+    // BroadcastReceivers for alarms
+    private val heartbeatReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            Log.d(TAG, "[${System.currentTimeMillis()}] Heartbeat alarm triggered (Doze-resistant)")
+            if (isRunning && newServerPort != 0) {
+                sendHeartbeat()
+                scheduleNextHeartbeat()  // Reschedule for next time
+            }
+        }
+    }
+    
+    private val inactivityCheckReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            Log.d(TAG, "[${System.currentTimeMillis()}] Inactivity check alarm triggered (Doze-resistant)")
+            if (isRunning && newServerPort != 0) {
+                checkInactivity()
+                scheduleNextInactivityCheck()  // Reschedule for next time
+            }
+        }
+    }
     
     init {
         // Generate random 16-byte clientID
@@ -208,29 +243,76 @@ class MorphUdpClient(
     }
     
     /**
-     * Start heartbeat mechanism using java.util.Timer.
-     * Timer runs in its own thread, not affected by Doze when combined with native threads.
+     * Start heartbeat mechanism using AlarmManager (Doze-resistant).
      */
     private fun startHeartbeat() {
-        Log.d(TAG, "Starting heartbeat timer, interval: ${config.heartbeatInterval}ms")
-        heartbeatTimer = java.util.Timer("MorphHeartbeat", false).apply {
-            schedule(object : java.util.TimerTask() {
-                override fun run() {
-                    if (isRunning && newServerPort != 0) {
-                        sendHeartbeat()
-                    }
-                }
-            }, 0, config.heartbeatInterval)
+        Log.d(TAG, "Starting heartbeat with AlarmManager, interval: ${config.heartbeatInterval}ms")
+        
+        // Register receiver
+        val filter = IntentFilter(ACTION_HEARTBEAT)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(heartbeatReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(heartbeatReceiver, filter)
+        }
+        
+        // Create pending intent
+        val intent = Intent(ACTION_HEARTBEAT)
+        heartbeatPendingIntent = PendingIntent.getBroadcast(
+            context,
+            1001,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        
+        // Send first heartbeat immediately
+        sendHeartbeat()
+        
+        // Schedule next heartbeat
+        scheduleNextHeartbeat()
+    }
+    
+    /**
+     * Schedule next heartbeat using setExactAndAllowWhileIdle (Doze-resistant).
+     */
+    private fun scheduleNextHeartbeat() {
+        heartbeatPendingIntent?.let { pendingIntent ->
+            val triggerTime = SystemClock.elapsedRealtime() + config.heartbeatInterval
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                // Use setExactAndAllowWhileIdle for Doze mode compatibility
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    triggerTime,
+                    pendingIntent
+                )
+            } else {
+                alarmManager.setExact(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    triggerTime,
+                    pendingIntent
+                )
+            }
+            Log.d(TAG, "Next heartbeat scheduled at ${triggerTime}")
         }
     }
     
     /**
-     * Stop heartbeat timer.
+     * Stop heartbeat alarms.
      */
     private fun stopHeartbeat() {
         Log.d(TAG, "Stopping heartbeat")
-        heartbeatTimer?.cancel()
-        heartbeatTimer = null
+        heartbeatPendingIntent?.let {
+            alarmManager.cancel(it)
+            it.cancel()
+        }
+        heartbeatPendingIntent = null
+        
+        try {
+            context.unregisterReceiver(heartbeatReceiver)
+        } catch (e: IllegalArgumentException) {
+            // Receiver not registered, ignore
+        }
     }
     
     /**
@@ -238,7 +320,7 @@ class MorphUdpClient(
      */
     private fun sendHeartbeat() {
         val timestamp = System.currentTimeMillis()
-        Log.d(TAG, "[$timestamp] Sending heartbeat")
+        Log.d(TAG, "[$timestamp] Sending heartbeat (AlarmManager)")
         
         val heartbeatMarker = byteArrayOf(0x01)
         val packet = protocolTemplate.encapsulate(heartbeatMarker, clientID)
@@ -249,28 +331,72 @@ class MorphUdpClient(
     }
     
     /**
-     * Start inactivity check using java.util.Timer.
+     * Start inactivity check using AlarmManager (Doze-resistant).
      */
     private fun startInactivityCheck() {
-        Log.d(TAG, "Starting inactivity check timer")
-        inactivityCheckTimer = java.util.Timer("MorphInactivityCheck", false).apply {
-            schedule(object : java.util.TimerTask() {
-                override fun run() {
-                    if (isRunning && newServerPort != 0) {
-                        checkInactivity()
-                    }
-                }
-            }, 90000, 90000) // Check every 90 seconds
+        Log.d(TAG, "Starting inactivity check with AlarmManager")
+        
+        // Register receiver
+        val filter = IntentFilter(ACTION_INACTIVITY_CHECK)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(inactivityCheckReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(inactivityCheckReceiver, filter)
+        }
+        
+        // Create pending intent
+        val intent = Intent(ACTION_INACTIVITY_CHECK)
+        inactivityCheckPendingIntent = PendingIntent.getBroadcast(
+            context,
+            1002,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        
+        // Schedule first check
+        scheduleNextInactivityCheck()
+    }
+    
+    /**
+     * Schedule next inactivity check using setExactAndAllowWhileIdle (Doze-resistant).
+     */
+    private fun scheduleNextInactivityCheck() {
+        inactivityCheckPendingIntent?.let { pendingIntent ->
+            val triggerTime = SystemClock.elapsedRealtime() + 90000 // Check every 90 seconds
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    triggerTime,
+                    pendingIntent
+                )
+            } else {
+                alarmManager.setExact(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    triggerTime,
+                    pendingIntent
+                )
+            }
+            Log.d(TAG, "Next inactivity check scheduled at ${triggerTime}")
         }
     }
     
     /**
-     * Stop inactivity check timer.
+     * Stop inactivity check alarms.
      */
     private fun stopInactivityCheck() {
         Log.d(TAG, "Stopping inactivity check")
-        inactivityCheckTimer?.cancel()
-        inactivityCheckTimer = null
+        inactivityCheckPendingIntent?.let {
+            alarmManager.cancel(it)
+            it.cancel()
+        }
+        inactivityCheckPendingIntent = null
+        
+        try {
+            context.unregisterReceiver(inactivityCheckReceiver)
+        } catch (e: IllegalArgumentException) {
+            // Receiver not registered, ignore
+        }
     }
     
     /**
@@ -278,7 +404,7 @@ class MorphUdpClient(
      */
     private fun checkInactivity() {
         val timestamp = System.currentTimeMillis()
-        Log.d(TAG, "[$timestamp] Checking inactivity")
+        Log.d(TAG, "[$timestamp] Checking inactivity (AlarmManager)")
         
         if (newServerPort == 0 || lastReceivedTime == 0L) {
             return
