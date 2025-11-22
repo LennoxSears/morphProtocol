@@ -63,11 +63,15 @@ class MorphUdpClient(
     private var inactivityCheckPendingIntent: PendingIntent? = null
     
     // BroadcastReceivers for alarms
+    // Note: BroadcastReceivers run on main thread, so we need to execute network operations in background
     private val heartbeatReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             Log.d(TAG, "[${System.currentTimeMillis()}] Heartbeat alarm triggered (Doze-resistant)")
             if (isRunning && newServerPort != 0) {
-                sendHeartbeat()
+                // Execute in background thread since BroadcastReceiver runs on main thread
+                Thread {
+                    sendHeartbeat()
+                }.start()
                 scheduleNextHeartbeat()  // Reschedule for next time
             }
         }
@@ -77,7 +81,10 @@ class MorphUdpClient(
         override fun onReceive(context: Context?, intent: Intent?) {
             Log.d(TAG, "[${System.currentTimeMillis()}] Inactivity check alarm triggered (Doze-resistant)")
             if (isRunning && newServerPort != 0) {
-                checkInactivity()
+                // Execute in background thread since BroadcastReceiver runs on main thread
+                Thread {
+                    checkInactivity()
+                }.start()
                 scheduleNextInactivityCheck()  // Reschedule for next time
             }
         }
@@ -628,11 +635,20 @@ class MorphUdpClient(
      */
     private fun sendToNewServer(data: ByteArray) {
         try {
+            if (socket == null) {
+                Log.e(TAG, "Failed to send to new server: socket is null")
+                return
+            }
+            if (!isRunning) {
+                Log.e(TAG, "Failed to send to new server: client not running")
+                return
+            }
             val address = InetAddress.getByName(config.remoteAddress)
             val packet = DatagramPacket(data, data.size, address, newServerPort)
             socket?.send(packet)
         } catch (e: Exception) {
-            println("Failed to send to new server: ${e.message}")
+            Log.e(TAG, "Failed to send to new server: ${e.message}", e)
+            e.printStackTrace()
         }
     }
     
