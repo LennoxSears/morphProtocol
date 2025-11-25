@@ -601,14 +601,19 @@ class MorphUdpClient(
      */
     private fun handleWireGuardPacket(data: ByteArray) {
         if (newServerPort != 0) {
+            Log.d(TAG, "[WG→Server] Obfuscating ${data.size} bytes")
             // Obfuscate and send to server
             val obfuscated = obfuscator.obfuscate(data)
+            Log.d(TAG, "[WG→Server] After obfuscation: ${obfuscated.size} bytes")
+            
             val packet = protocolTemplate.encapsulate(obfuscated, clientID)
+            Log.d(TAG, "[WG→Server] After template: ${packet.size} bytes, sending to ${config.remoteAddress}:$newServerPort")
+            
             protocolTemplate.updateState()
             
             sendToNewServer(packet)
         } else {
-            println("New server port is not available yet")
+            Log.w(TAG, "New server port is not available yet")
         }
     }
     
@@ -619,15 +624,20 @@ class MorphUdpClient(
         // Update last received time
         lastReceivedTime = System.currentTimeMillis()
         
+        Log.d(TAG, "[Server→WG] Received ${data.size} bytes from server")
+        
         // Decapsulate template layer
         val obfuscatedData = protocolTemplate.decapsulate(data)
         if (obfuscatedData == null) {
-            println("Failed to decapsulate template packet from server")
+            Log.w(TAG, "[Server→WG] Failed to decapsulate template packet from server")
             return
         }
         
+        Log.d(TAG, "[Server→WG] After template decapsulation: ${obfuscatedData.size} bytes")
+        
         // Deobfuscate
         val deobfuscated = obfuscator.deobfuscate(obfuscatedData)
+        Log.d(TAG, "[Server→WG] After deobfuscation: ${deobfuscated.size} bytes, sending to WireGuard ${config.localWgAddress}:${config.localWgPort}")
         
         // Send to local WireGuard
         sendToLocalWireGuard(deobfuscated)
