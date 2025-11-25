@@ -15,6 +15,7 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
+import com.morphprotocol.client.test.ObfuscationDebugTest
 
 @CapacitorPlugin(name = "MorphProtocol")
 class MorphProtocolPlugin : Plugin() {
@@ -238,6 +239,20 @@ class MorphProtocolPlugin : Plugin() {
             serviceMessenger?.send(message)
         } catch (e: Exception) {
             call.reject("Failed to get status: ${e.message}")
+        }
+    }
+    
+    @PluginMethod
+    fun testObfuscation(call: PluginCall) {
+        try {
+            val testResults = ObfuscationDebugTest.runTests()
+            val result = JSObject().apply {
+                put("success", true)
+                put("results", testResults)
+            }
+            call.resolve(result)
+        } catch (e: Exception) {
+            call.reject("Test failed: ${e.message}")
         }
     }
     
