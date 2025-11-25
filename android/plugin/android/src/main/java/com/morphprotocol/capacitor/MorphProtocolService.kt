@@ -55,6 +55,7 @@ class MorphProtocolService : Service() {
         const val KEY_MESSAGE = "message"
         const val KEY_CLIENT_ID = "clientId"
         const val KEY_SERVER_PORT = "serverPort"
+        const val KEY_CLIENT_PORT = "clientPort"
         const val KEY_CONNECTED = "connected"
         const val KEY_STATUS = "status"
     }
@@ -67,6 +68,7 @@ class MorphProtocolService : Service() {
     private var isConnected = false
     private var clientId: String? = null
     private var serverPort: Int? = null
+    private var clientPort: Int? = null
     private var connectThread: Thread? = null
     
     override fun onCreate() {
@@ -153,14 +155,16 @@ class MorphProtocolService : Service() {
                         isConnected = true
                         clientId = result.clientId
                         serverPort = result.serverPort
+                        clientPort = result.clientPort
                         
-                        Log.d(TAG, "Connected successfully. Server port: ${result.serverPort}")
+                        Log.d(TAG, "Connected successfully. Server port: ${result.serverPort}, Client port: ${result.clientPort}")
                         
                         sendResponse(replyTo, MSG_CONNECT_SUCCESS, Bundle().apply {
                             putBoolean(KEY_SUCCESS, true)
                             putString(KEY_MESSAGE, result.message)
                             putString(KEY_CLIENT_ID, result.clientId)
                             putInt(KEY_SERVER_PORT, result.serverPort)
+                            putInt(KEY_CLIENT_PORT, result.clientPort)
                         })
                     }
                     
@@ -208,6 +212,7 @@ class MorphProtocolService : Service() {
             isConnected = false
             clientId = null
             serverPort = null
+            clientPort = null
             morphClient = null
             
             connectThread?.interrupt()
@@ -238,6 +243,7 @@ class MorphProtocolService : Service() {
             putString(KEY_STATUS, if (isConnected) "Connected" else "Disconnected")
             clientId?.let { putString(KEY_CLIENT_ID, it) }
             serverPort?.let { putInt(KEY_SERVER_PORT, it) }
+            clientPort?.let { putInt(KEY_CLIENT_PORT, it) }
         }
         sendResponse(replyTo, MSG_STATUS_RESPONSE, responseBundle)
     }

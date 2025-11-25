@@ -45,6 +45,7 @@ class MorphUdpClient(
     
     private var socket: DatagramSocket? = null
     private var isRunning = false
+    private var localPort: Int = 0
     private var clientID: ByteArray = ByteArray(16)
     private var encryptor: Encryptor
     private var obfuscator: Obfuscator
@@ -135,7 +136,7 @@ class MorphUdpClient(
         try {
             isRunning = true
             socket = DatagramSocket()
-            val localPort = socket!!.localPort
+            localPort = socket!!.localPort
             Log.d(TAG, "Client socket bound to port $localPort")
             
             // Start handshake timer (like old plugin)
@@ -583,6 +584,7 @@ class MorphUdpClient(
                         onConnectedCallback?.invoke(ConnectionResult(
                             success = true,
                             serverPort = newServerPort,
+                            clientPort = localPort,
                             clientId = clientID.toHex(),
                             message = "Connected successfully"
                         ))

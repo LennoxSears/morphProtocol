@@ -136,6 +136,7 @@ class MorphProtocolPlugin : Plugin() {
                                 put("message", data.getString(MorphProtocolService.KEY_MESSAGE))
                                 put("clientId", data.getString(MorphProtocolService.KEY_CLIENT_ID))
                                 put("serverPort", data.getInt(MorphProtocolService.KEY_SERVER_PORT))
+                                put("clientPort", data.getInt(MorphProtocolService.KEY_CLIENT_PORT))
                             }
                             
                             // Notify listeners
@@ -223,6 +224,9 @@ class MorphProtocolPlugin : Plugin() {
                                 }
                                 if (data.containsKey(MorphProtocolService.KEY_SERVER_PORT)) {
                                     put("serverPort", data.getInt(MorphProtocolService.KEY_SERVER_PORT))
+                                }
+                                if (data.containsKey(MorphProtocolService.KEY_CLIENT_PORT)) {
+                                    put("clientPort", data.getInt(MorphProtocolService.KEY_CLIENT_PORT))
                                 }
                             }
                             call.resolve(result)

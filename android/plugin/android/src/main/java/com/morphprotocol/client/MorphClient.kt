@@ -10,6 +10,7 @@ import com.morphprotocol.client.network.MorphUdpClient
 data class ConnectionResult(
     val success: Boolean,
     val serverPort: Int = 0,
+    val clientPort: Int = 0,
     val clientId: String = "",
     val message: String = ""
 )
