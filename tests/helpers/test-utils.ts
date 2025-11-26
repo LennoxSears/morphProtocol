@@ -91,3 +91,25 @@ export function createDeterministicFnInitor() {
     randomValue: 42, // Fixed value for testing
   };
 }
+
+/**
+ * Create random function initializer (like production)
+ * Uses shuffled substitution table and random value
+ */
+export function createRandomFnInitor() {
+  // Create substitution table with all values 0-255
+  const substitutionTable = Array.from({ length: 256 }, (_, i) => i);
+  
+  // Fisher-Yates shuffle
+  for (let i = 255; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const temp = substitutionTable[i];
+    substitutionTable[i] = substitutionTable[j];
+    substitutionTable[j] = temp;
+  }
+  
+  return {
+    substitutionTable,
+    randomValue: Math.floor(Math.random() * 256),
+  };
+}

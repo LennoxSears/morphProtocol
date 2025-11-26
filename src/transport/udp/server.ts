@@ -232,6 +232,20 @@ server.on('message', async (message, remote) => {
     // New session - create obfuscator, template, and socket
     logger.info(`Creating new session for clientID ${clientID}`);
     
+    // Validate fnInitor format
+    if (!handshakeData.fnInitor || typeof handshakeData.fnInitor !== 'object') {
+      logger.error(`Invalid fnInitor format from client ${clientID}: ${JSON.stringify(handshakeData.fnInitor)}`);
+      return;
+    }
+    if (!Array.isArray(handshakeData.fnInitor.substitutionTable) || handshakeData.fnInitor.substitutionTable.length !== 256) {
+      logger.error(`Invalid substitutionTable from client ${clientID}: length=${handshakeData.fnInitor.substitutionTable?.length}`);
+      return;
+    }
+    if (typeof handshakeData.fnInitor.randomValue !== 'number') {
+      logger.error(`Invalid randomValue from client ${clientID}: ${handshakeData.fnInitor.randomValue}`);
+      return;
+    }
+    
     const obfuscator = new Obfuscator(
       handshakeData.key,
       handshakeData.obfuscationLayer,

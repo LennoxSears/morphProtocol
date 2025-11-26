@@ -136,4 +136,78 @@ describe('substitution obfuscation function', () => {
       }
     });
   });
+
+  describe('error handling', () => {
+    it('should throw error when deobfuscating with undefined table', () => {
+      const input = new Uint8Array([1, 2, 3, 4, 5]);
+      const keyArray = new Uint8Array(5);
+
+      expect(() => {
+        substitutionPair.deobfuscation(input, keyArray, undefined as any);
+      }).toThrow('de_substitution: _initor (substitution table) is required but was undefined or invalid');
+    });
+
+    it('should throw error when deobfuscating with null table', () => {
+      const input = new Uint8Array([1, 2, 3, 4, 5]);
+      const keyArray = new Uint8Array(5);
+
+      expect(() => {
+        substitutionPair.deobfuscation(input, keyArray, null as any);
+      }).toThrow('de_substitution: _initor (substitution table) is required but was undefined or invalid');
+    });
+
+    it('should throw error when deobfuscating with non-array table', () => {
+      const input = new Uint8Array([1, 2, 3, 4, 5]);
+      const keyArray = new Uint8Array(5);
+
+      expect(() => {
+        substitutionPair.deobfuscation(input, keyArray, 12345 as any);
+      }).toThrow('de_substitution: _initor (substitution table) is required but was undefined or invalid');
+    });
+
+    it('should work correctly with valid table', () => {
+      const input = new Uint8Array([1, 2, 3, 4, 5]);
+      const keyArray = new Uint8Array(5);
+      const table = substitutionPair.initorFn();
+
+      const obfuscated = substitutionPair.obfuscation(input, keyArray, table);
+      const deobfuscated = substitutionPair.deobfuscation(obfuscated, keyArray, table);
+
+      expect(Buffer.from(deobfuscated).equals(Buffer.from(input))).toBe(true);
+    });
+  });
+
+  describe('WireGuard handshake simulation', () => {
+    it('should handle WireGuard handshake initiation size (148 bytes)', () => {
+      const input = new Uint8Array(148);
+      for (let i = 0; i < 148; i++) {
+        input[i] = i % 256;
+      }
+      const keyArray = new Uint8Array(148);
+      const table = substitutionPair.initorFn();
+
+      const obfuscated = substitutionPair.obfuscation(input, keyArray, table);
+      const deobfuscated = substitutionPair.deobfuscation(obfuscated, keyArray, table);
+
+      expect(Buffer.from(deobfuscated).equals(Buffer.from(input))).toBe(true);
+    });
+
+    it('should handle multiple consecutive packets', () => {
+      const table = substitutionPair.initorFn();
+
+      // Simulate 4 consecutive WireGuard handshake packets
+      for (let packetNum = 0; packetNum < 4; packetNum++) {
+        const input = new Uint8Array(148);
+        for (let i = 0; i < 148; i++) {
+          input[i] = (i + packetNum * 10) % 256;
+        }
+        const keyArray = new Uint8Array(148);
+
+        const obfuscated = substitutionPair.obfuscation(input, keyArray, table);
+        const deobfuscated = substitutionPair.deobfuscation(obfuscated, keyArray, table);
+
+        expect(Buffer.from(deobfuscated).equals(Buffer.from(input))).toBe(true);
+      }
+    });
+  });
 });

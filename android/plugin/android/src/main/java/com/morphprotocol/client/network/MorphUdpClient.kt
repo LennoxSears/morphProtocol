@@ -241,12 +241,19 @@ class MorphUdpClient(
      * Send handshake data to server.
      */
     private fun sendHandshake() {
+        // Get actual initializers from obfuscator
+        val substitutionTable = obfuscator.getSubstitutionTable()
+        val randomValue = obfuscator.getRandomValue()
+        
         val handshakeData = mapOf(
             "clientID" to Base64.getEncoder().encodeToString(clientID),
             "key" to obfuscationKey,  // Use stored key
             "obfuscationLayer" to config.obfuscationLayer,
             "randomPadding" to config.paddingLength,
-            "fnInitor" to obfuscationFnInitor,  // Use stored fnInitor
+            "fnInitor" to mapOf(
+                "substitutionTable" to substitutionTable,
+                "randomValue" to randomValue
+            ),
             "templateId" to protocolTemplate.id,
             "templateParams" to protocolTemplate.getParams(),
             "userId" to config.userId,

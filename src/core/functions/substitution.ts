@@ -13,6 +13,11 @@ function de_substitution(input: Uint8Array, _keyArray: Uint8Array, _initor:numbe
     const length = input.length;
     const deobfuscated = new Uint8Array(length);
 
+    // Guard against undefined _initor
+    if (!_initor || !Array.isArray(_initor)) {
+        throw new Error('de_substitution: _initor (substitution table) is required but was undefined or invalid');
+    }
+
     for (let i = 0; i < length; i++) {
         const value = input[i];
 

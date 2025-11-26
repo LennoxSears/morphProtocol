@@ -107,7 +107,13 @@ export class Obfuscator {
       if (DEBUG) {
         console.log('Original Data:', deobfuscatedData);
       }
-      deobfuscatedData = functions[i].deobfuscation(deobfuscatedData, keyArray, functions[i].initor) as Uint8Array;
+      try {
+        deobfuscatedData = functions[i].deobfuscation(deobfuscatedData, keyArray, functions[i].initor) as Uint8Array;
+      } catch (error: any) {
+        console.error(`[Deobfuscation Error] Function: ${functions[i].deobfuscation.name}, Index: ${functions[i].index}, Error: ${error.message}`);
+        console.error(`[Deobfuscation Error] Initor present: ${functions[i].initor !== undefined}, Initor type: ${typeof functions[i].initor}`);
+        throw error;
+      }
       if (DEBUG) {
         console.log('Obfuscated Data:', deobfuscatedData);
         console.log('Function is:', functions[i].deobfuscation.name);

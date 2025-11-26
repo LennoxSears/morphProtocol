@@ -15,7 +15,7 @@ class ObfuscationTest {
         
         // Create obfuscator with same parameters
         val key = 123
-        val layer = 3
+        val layer = 4  // Use layer=4 to test all 11 functions including substitution and addRandomValue
         val paddingLength = 8
         val fnInitor = 12345
         
@@ -82,8 +82,8 @@ class ObfuscationTest {
         println("1. Original WireGuard packet: ${wgPacket.size} bytes")
         println("   First 16 bytes: ${wgPacket.take(16).joinToString(" ") { "%02x".format(it) }}")
         
-        // Step 1: Obfuscate
-        val obfuscator = Obfuscator(123, 3, 8, 12345)
+        // Step 1: Obfuscate (use layer=4 to test all functions)
+        val obfuscator = Obfuscator(123, 4, 8, 12345)
         val obfuscated = obfuscator.obfuscate(wgPacket)
         println("\n2. After obfuscation: ${obfuscated.size} bytes")
         

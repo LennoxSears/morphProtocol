@@ -47,6 +47,23 @@ class Obfuscator(
     }
     
     /**
+     * Get the substitution table for sending in handshake.
+     * Returns the 256-byte substitution table as a list of integers (0-255).
+     */
+    fun getSubstitutionTable(): List<Int> {
+        val table = initializers[9] as? ByteArray ?: return emptyList()
+        return table.map { it.toInt() and 0xFF }
+    }
+    
+    /**
+     * Get the random value for sending in handshake.
+     * Returns the random value (0-255) used by addRandomValue function.
+     */
+    fun getRandomValue(): Int {
+        return initializers[10] as? Int ?: 0
+    }
+    
+    /**
      * Obfuscate data with multi-layer transformations.
      * Returns: [3-byte header][obfuscated data][padding]
      */
