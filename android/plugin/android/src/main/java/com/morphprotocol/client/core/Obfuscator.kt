@@ -36,7 +36,8 @@ class Obfuscator(
         }
         
         // Generate 256-byte key array from single key value
-        keyArray = ByteArray(256) { ((key + it) % 256).toByte() }
+        // Must match TypeScript implementation: (key + i * 37) % 256
+        keyArray = ByteArray(256) { ((key + it * 37) % 256).toByte() }
         
         // Generate function initializers (deterministic based on fnInitor)
         // In production, this should use fnInitor as seed for reproducibility

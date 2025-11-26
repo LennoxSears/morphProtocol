@@ -249,6 +249,7 @@ server.on('message', async (message, remote) => {
       return;
     }
     logger.info(`fnInitor validation passed! substitutionTable first 10 values: ${handshakeData.fnInitor.substitutionTable.slice(0, 10)}`);
+    logger.info(`Creating Obfuscator with: key=${handshakeData.key}, layer=${handshakeData.obfuscationLayer}, padding=${handshakeData.randomPadding}`);
 
     
     const obfuscator = new Obfuscator(
@@ -257,6 +258,8 @@ server.on('message', async (message, remote) => {
       handshakeData.randomPadding,
       handshakeData.fnInitor
     );
+    
+    logger.info(`Obfuscator created successfully for client ${clientID}`);
     
     // Create protocol template from handshake
     const template = createTemplate(handshakeData.templateId, handshakeData.templateParams);
