@@ -245,6 +245,9 @@ class MorphUdpClient(
         val substitutionTable = obfuscator.getSubstitutionTable()
         val randomValue = obfuscator.getRandomValue()
         
+        Log.d(TAG, "Handshake: substitutionTable size=${substitutionTable.size}, randomValue=$randomValue")
+        Log.d(TAG, "Handshake: substitutionTable first 10 values=${substitutionTable.take(10)}")
+        
         val handshakeData = mapOf(
             "clientID" to Base64.getEncoder().encodeToString(clientID),
             "key" to obfuscationKey,  // Use stored key
@@ -260,9 +263,12 @@ class MorphUdpClient(
             "publicKey" to "not implemented"
         )
         
-        Log.d(TAG, "Handshake params: key=$obfuscationKey, layer=${config.obfuscationLayer}, padding=${config.paddingLength}, fnInitor=$obfuscationFnInitor, templateId=${protocolTemplate.id}")
+        Log.d(TAG, "Handshake params: key=$obfuscationKey, layer=${config.obfuscationLayer}, padding=${config.paddingLength}, templateId=${protocolTemplate.id}")
         
         val json = gson.toJson(handshakeData)
+        Log.d(TAG, "Handshake JSON length: ${json.length} bytes")
+        Log.d(TAG, "Handshake JSON preview: ${json.take(200)}...")
+        
         val encrypted = encryptor.simpleEncrypt(json)
         
         sendToHandshakeServer(encrypted.toByteArray())

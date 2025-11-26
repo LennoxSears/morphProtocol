@@ -233,18 +233,23 @@ server.on('message', async (message, remote) => {
     logger.info(`Creating new session for clientID ${clientID}`);
     
     // Validate fnInitor format
+    logger.info(`Received fnInitor type: ${typeof handshakeData.fnInitor}`);
     if (!handshakeData.fnInitor || typeof handshakeData.fnInitor !== 'object') {
       logger.error(`Invalid fnInitor format from client ${clientID}: ${JSON.stringify(handshakeData.fnInitor)}`);
       return;
     }
+    logger.info(`fnInitor.substitutionTable type: ${typeof handshakeData.fnInitor.substitutionTable}, isArray: ${Array.isArray(handshakeData.fnInitor.substitutionTable)}, length: ${handshakeData.fnInitor.substitutionTable?.length}`);
     if (!Array.isArray(handshakeData.fnInitor.substitutionTable) || handshakeData.fnInitor.substitutionTable.length !== 256) {
       logger.error(`Invalid substitutionTable from client ${clientID}: length=${handshakeData.fnInitor.substitutionTable?.length}`);
       return;
     }
+    logger.info(`fnInitor.randomValue: ${handshakeData.fnInitor.randomValue} (type: ${typeof handshakeData.fnInitor.randomValue})`);
     if (typeof handshakeData.fnInitor.randomValue !== 'number') {
       logger.error(`Invalid randomValue from client ${clientID}: ${handshakeData.fnInitor.randomValue}`);
       return;
     }
+    logger.info(`fnInitor validation passed! substitutionTable first 10 values: ${handshakeData.fnInitor.substitutionTable.slice(0, 10)}`);
+
     
     const obfuscator = new Obfuscator(
       handshakeData.key,
