@@ -224,7 +224,10 @@ class Substitution : ObfuscationFunction {
         
         val output = ByteArray(input.size)
         for (i in input.indices) {
-            output[i] = table[input[i].toInt() and 0xFF]
+            // CRITICAL: Convert table value to unsigned (0-255) to match TypeScript behavior
+            // ByteArray stores signed bytes (-128 to 127), but we need unsigned (0-255)
+            val tableValue = table[input[i].toInt() and 0xFF].toInt() and 0xFF
+            output[i] = tableValue.toByte()
         }
         return output
     }
@@ -236,12 +239,16 @@ class Substitution : ObfuscationFunction {
         // Create inverse table
         val inverseTable = ByteArray(256)
         for (i in 0 until 256) {
-            inverseTable[table[i].toInt() and 0xFF] = i.toByte()
+            // CRITICAL: Convert table value to unsigned to match TypeScript
+            val tableValue = table[i].toInt() and 0xFF
+            inverseTable[tableValue] = i.toByte()
         }
         
         val output = ByteArray(input.size)
         for (i in input.indices) {
-            output[i] = inverseTable[input[i].toInt() and 0xFF]
+            // CRITICAL: Convert inverse table value to unsigned
+            val inverseValue = inverseTable[input[i].toInt() and 0xFF].toInt() and 0xFF
+            output[i] = inverseValue.toByte()
         }
         return output
     }
