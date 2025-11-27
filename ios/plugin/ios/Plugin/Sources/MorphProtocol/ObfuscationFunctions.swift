@@ -10,19 +10,25 @@ protocol ObfuscationFunction {
 class BitwiseRotationAndXOR: ObfuscationFunction {
     func obfuscate(_ input: Data, keyArray: Data, initor: Any?) -> Data {
         var output = Data(count: input.count)
-        for i in 0..<input.count {
+        let length = input.count
+        for i in 0..<length {
+            let shift = (i % 8) + 1
             let byte = input[i]
-            let rotated = (byte << 3) | (byte >> 5)
-            output[i] = rotated ^ keyArray[i % keyArray.count]
+            let rotated = (byte << shift) | (byte >> (8 - shift))
+            let keyIndex = (i + length - 1) % length
+            output[i] = rotated ^ keyArray[keyIndex % keyArray.count]
         }
         return output
     }
     
     func deobfuscate(_ input: Data, keyArray: Data, initor: Any?) -> Data {
         var output = Data(count: input.count)
-        for i in 0..<input.count {
-            let xored = input[i] ^ keyArray[i % keyArray.count]
-            output[i] = (xored >> 3) | (xored << 5)
+        let length = input.count
+        for i in 0..<length {
+            let shift = (i % 8) + 1
+            let keyIndex = (i + length - 1) % length
+            let xored = input[i] ^ keyArray[keyIndex % keyArray.count]
+            output[i] = (xored >> shift) | (xored << (8 - shift))
         }
         return output
     }
@@ -246,6 +252,12 @@ class FunctionRegistry {
         AddRandomValue()
     ]
     
+    // Pre-calculated permutations (matching TypeScript/Android)
+    private lazy var permutations1: [[Int]] = calculatePermutations(layer: 1)
+    private lazy var permutations2: [[Int]] = calculatePermutations(layer: 2)
+    private lazy var permutations3: [[Int]] = calculatePermutations(layer: 3)
+    private lazy var permutations4: [[Int]] = calculatePermutations(layer: 4)
+    
     func getFunction(at index: Int) -> ObfuscationFunction {
         return functions[index]
     }
@@ -254,24 +266,55 @@ class FunctionRegistry {
         return functions.count
     }
     
-    func calculateTotalCombinations(layer: Int) -> Int {
-        var total = 1
-        for _ in 0..<layer {
-            total *= functions.count
+    /// Calculate permutations without replacement (matching TypeScript/Android)
+    private func calculatePermutations(layer: Int) -> [[Int]] {
+        let options = Array(0..<functions.count)
+        var result: [[Int]] = []
+        
+        func permute(current: [Int], remaining: [Int]) {
+            if current.count == layer {
+                result.append(current)
+                return
+            }
+            
+            for i in 0..<remaining.count {
+                var next = current
+                next.append(remaining[i])
+                var rest = remaining
+                rest.remove(at: i)
+                permute(current: next, remaining: rest)
+            }
         }
-        return total
+        
+        permute(current: [], remaining: options)
+        return result
+    }
+    
+    func calculateTotalCombinations(layer: Int) -> Int {
+        switch layer {
+        case 1: return permutations1.count
+        case 2: return permutations2.count
+        case 3: return permutations3.count
+        case 4: return permutations4.count
+        default: return 0
+        }
     }
     
     func getFunctionIndices(comboIndex: Int, layer: Int) -> [Int] {
-        var indices = [Int](repeating: 0, count: layer)
-        var remaining = comboIndex
-        
-        for i in (0..<layer).reversed() {
-            indices[i] = remaining % functions.count
-            remaining /= functions.count
+        let permutations: [[Int]]
+        switch layer {
+        case 1: permutations = permutations1
+        case 2: permutations = permutations2
+        case 3: permutations = permutations3
+        case 4: permutations = permutations4
+        default: return []
         }
         
-        return indices
+        guard comboIndex >= 0 && comboIndex < permutations.count else {
+            return []
+        }
+        
+        return permutations[comboIndex]
     }
 }
 

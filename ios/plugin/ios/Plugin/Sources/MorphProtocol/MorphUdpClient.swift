@@ -13,6 +13,8 @@ public class MorphUdpClient {
     private var protocolTemplate: ProtocolTemplate
     private var newServerPort: UInt16 = 0
     private var lastReceivedTime: Date?
+    private var obfuscationKey: Int = 0
+    private var obfuscationFnInitor: Int = 0
     
     private var heartbeatTimer: Timer?
     private var inactivityTimer: Timer?
@@ -48,17 +50,17 @@ public class MorphUdpClient {
         self.protocolTemplate = TemplateFactory.createTemplate(id: templateId)!
         print("Selected protocol template: \(protocolTemplate.name) (ID: \(templateId))")
         
-        // Initialize obfuscator
-        let key = Int.random(in: 0..<256)
-        let fnInitor = FunctionInitializer.generateInitializerId()
+        // Initialize obfuscator and store parameters
+        self.obfuscationKey = Int.random(in: 0..<256)
+        self.obfuscationFnInitor = FunctionInitializer.generateInitializerId()
         self.obfuscator = Obfuscator(
-            key: key,
+            key: obfuscationKey,
             layer: config.obfuscationLayer,
             paddingLength: config.paddingLength,
-            fnInitor: fnInitor
+            fnInitor: obfuscationFnInitor
         )
         
-        print("Obfuscation parameters: key=\(key), layer=\(config.obfuscationLayer), padding=\(config.paddingLength), fnInitor=\(fnInitor)")
+        print("Obfuscation parameters: key=\(obfuscationKey), layer=\(config.obfuscationLayer), padding=\(config.paddingLength), fnInitor=\(obfuscationFnInitor)")
     }
     
     /// Start the UDP client
@@ -144,12 +146,19 @@ public class MorphUdpClient {
     }
     
     private func sendHandshake() {
+        // Get actual initializers from obfuscator
+        let substitutionTable = obfuscator.getSubstitutionTable()
+        let randomValue = obfuscator.getRandomValue()
+        
         let handshakeData: [String: Any] = [
             "clientID": clientID.base64EncodedString(),
-            "key": Int.random(in: 0..<256),
+            "key": obfuscationKey,  // Use stored key
             "obfuscationLayer": config.obfuscationLayer,
             "randomPadding": config.paddingLength,
-            "fnInitor": FunctionInitializer.generateInitializerId(),
+            "fnInitor": [
+                "substitutionTable": substitutionTable,
+                "randomValue": randomValue
+            ],
             "templateId": protocolTemplate.id,
             "templateParams": protocolTemplate.getParams(),
             "userId": config.userId,

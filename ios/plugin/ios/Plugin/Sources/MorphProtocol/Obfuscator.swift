@@ -13,15 +13,23 @@ public class Obfuscator {
     private let registry = FunctionRegistry.shared
     
     public init(key: Int, layer: Int, paddingLength: Int, fnInitor: Int) {
+        // Validate parameters (matching TypeScript/Android)
+        guard layer >= 1 && layer <= 4 else {
+            fatalError("Layer must be between 1 and 4")
+        }
+        guard paddingLength >= 1 && paddingLength <= 8 else {
+            fatalError("Padding length must be between 1 and 8")
+        }
+        
         self.key = key
         self.layer = layer
         self.paddingLength = paddingLength
         self.fnInitor = fnInitor
         
-        // Generate 256-byte key array
+        // Generate 256-byte key array (must match TypeScript/Android)
         var keyBytes = Data(count: 256)
         for i in 0..<256 {
-            keyBytes[i] = UInt8((key + i) % 256)
+            keyBytes[i] = UInt8((key + i * 37) % 256)
         }
         self.keyArray = keyBytes
         
@@ -40,7 +48,9 @@ public class Obfuscator {
         var header = Data(count: 3)
         header[0] = UInt8.random(in: 0...255)
         header[1] = UInt8.random(in: 0...255)
-        header[2] = UInt8(paddingLength)
+        // Random padding length (matching TypeScript/Android)
+        let actualPaddingLength = Int.random(in: 1...paddingLength)
+        header[2] = UInt8(actualPaddingLength)
         
         // Calculate function combo from header
         let comboIndex = (Int(header[0]) * Int(header[1])) % totalCombinations
@@ -55,8 +65,8 @@ public class Obfuscator {
         }
         
         // Add random padding
-        var padding = Data(count: paddingLength)
-        for i in 0..<paddingLength {
+        var padding = Data(count: actualPaddingLength)
+        for i in 0..<actualPaddingLength {
             padding[i] = UInt8.random(in: 0...255)
         }
         
@@ -103,11 +113,24 @@ public class Obfuscator {
         return data
     }
     
+    /// Get the substitution table for sending in handshake
+    public func getSubstitutionTable() -> [UInt8] {
+        guard let table = initializers[9] as? Data else {
+            return []
+        }
+        return Array(table)
+    }
+    
+    /// Get the random value for sending in handshake
+    public func getRandomValue() -> UInt8 {
+        return initializers[10] as? UInt8 ?? 0
+    }
+    
     /// Update the obfuscator with new key
     public func setKey(_ newKey: Int) {
         var keyBytes = Data(count: 256)
         for i in 0..<256 {
-            keyBytes[i] = UInt8((newKey + i) % 256)
+            keyBytes[i] = UInt8((newKey + i * 37) % 256)
         }
         // Note: This would require making keyArray mutable
     }
