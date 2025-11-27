@@ -16,20 +16,14 @@ interface ObfuscationFunction {
     fun deobfuscate(input: ByteArray, keyArray: ByteArray, initor: Any?): ByteArray
 }
 
-/**
- * 1. Bitwise Rotation and XOR
- * Rotates bits left by 3 positions and XORs with key.
- */
 class BitwiseRotationAndXOR : ObfuscationFunction {
     override fun obfuscate(input: ByteArray, keyArray: ByteArray, initor: Any?): ByteArray {
         val length = input.size
         val output = ByteArray(length)
         for (i in input.indices) {
-            // FIXED: Match TypeScript - variable shift based on position, not fixed shift of 3
             val shift = (i % 8) + 1
             val inputValue = input[i].toInt() and 0xFF
             val rotated = ((inputValue shl shift) or (inputValue ushr (8 - shift))) and 0xFF
-            // FIXED: Match TypeScript - use (i + length - 1) % length for keyArray index
             val keyIndex = (i + length - 1) % length
             output[i] = (rotated xor (keyArray[keyIndex % keyArray.size].toInt() and 0xFF)).toByte()
         }
@@ -40,7 +34,6 @@ class BitwiseRotationAndXOR : ObfuscationFunction {
         val length = input.size
         val output = ByteArray(length)
         for (i in input.indices) {
-            // FIXED: Match TypeScript - variable shift and correct keyArray index
             val shift = (i % 8) + 1
             val keyIndex = (i + length - 1) % length
             val xored = (input[i].toInt() and 0xFF) xor (keyArray[keyIndex % keyArray.size].toInt() and 0xFF)

@@ -39,10 +39,6 @@ class Obfuscator(
         // Must match TypeScript implementation: (key + i * 37) % 256
         keyArray = ByteArray(256) { ((key + it * 37) % 256).toByte() }
         
-        // DEBUG: Log first 10 bytes of keyArray to verify fix is applied
-        android.util.Log.d("Obfuscator", "🔧 FIXED VERSION - KeyArray first 10 bytes: ${keyArray.take(10).joinToString(",") { (it.toInt() and 0xFF).toString() }}")
-        android.util.Log.d("Obfuscator", "🔧 Key=$key, Layer=$layer, Padding=$paddingLength")
-        
         // Generate function initializers (deterministic based on fnInitor)
         // In production, this should use fnInitor as seed for reproducibility
         // For now, we generate fresh initializers
@@ -88,9 +84,6 @@ class Obfuscator(
         // Calculate function combo from header
         val comboIndex = ((header[0].toInt() and 0xFF) * (header[1].toInt() and 0xFF)) % totalCombinations
         val functionIndices = FunctionRegistry.getFunctionIndices(comboIndex, layer)
-        
-        android.util.Log.d("Obfuscator", "🔧 Obfuscate: header=[${header[0].toInt() and 0xFF}, ${header[1].toInt() and 0xFF}, ${header[2].toInt() and 0xFF}], comboIndex=$comboIndex")
-        android.util.Log.d("Obfuscator", "🔧 Obfuscate: functionIndices=${functionIndices.joinToString(",")}")
         
         // Apply obfuscation layers
         var data = input

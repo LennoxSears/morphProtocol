@@ -1,8 +1,6 @@
 import { FunctionRegistry, HouseFunctionPair } from './function-registry';
 import * as crypto from 'crypto';
 
-const DEBUG = false;
-
 export class Obfuscator {
   private key: number;
   private paddingLength: number;
@@ -100,19 +98,9 @@ export class Obfuscator {
   ): Uint8Array {
     let obfuscatedData: Uint8Array = new Uint8Array(buffer);
     let keyArray = this.generateKeyArray(obfuscatedData.length);
-    if (DEBUG) {
-      console.log('\n\n\n');
-    }
+    
     for (const func of functions) {
-      if (DEBUG) {
-        console.log('Original Data:', obfuscatedData);
-      }
       obfuscatedData = func.obfuscation(obfuscatedData, keyArray, func.initor) as Uint8Array;
-      if (DEBUG) {
-        console.log('Obfuscated Data:', obfuscatedData);
-        console.log('Function is:', func.obfuscation.name);
-        console.log('----------------------------------');
-      }
     }
 
     return obfuscatedData;
@@ -124,25 +112,9 @@ export class Obfuscator {
   ): Uint8Array {
     let deobfuscatedData: Uint8Array = new Uint8Array(obfuscated);
     let keyArray = this.generateKeyArray(deobfuscatedData.length);
-    if (DEBUG) {
-      console.log('\n\n\n');
-    }
+    
     for (let i = functions.length - 1; i >= 0; i--) {
-      if (DEBUG) {
-        console.log('Original Data:', deobfuscatedData);
-      }
-      try {
-        deobfuscatedData = functions[i].deobfuscation(deobfuscatedData, keyArray, functions[i].initor) as Uint8Array;
-      } catch (error: any) {
-        console.error(`[Deobfuscation Error] Function: ${functions[i].deobfuscation.name}, Index: ${functions[i].index}, Error: ${error.message}`);
-        console.error(`[Deobfuscation Error] Initor present: ${functions[i].initor !== undefined}, Initor type: ${typeof functions[i].initor}`);
-        throw error;
-      }
-      if (DEBUG) {
-        console.log('Obfuscated Data:', deobfuscatedData);
-        console.log('Function is:', functions[i].deobfuscation.name);
-        console.log('----------------------------------');
-      }
+      deobfuscatedData = functions[i].deobfuscation(deobfuscatedData, keyArray, functions[i].initor) as Uint8Array;
     }
 
     return deobfuscatedData;

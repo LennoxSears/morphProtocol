@@ -620,30 +620,9 @@ class MorphUdpClient(
      */
     private fun handleWireGuardPacket(data: ByteArray) {
         if (newServerPort != 0) {
-            // Log ALL bytes for complete verification
-            val fullHex = data.joinToString(" ") { "%02x".format(it) }
-            Log.d(TAG, "[TEST-WG→Server] Original WG packet (${data.size} bytes):")
-            Log.d(TAG, "[TEST-WG→Server] HEX: $fullHex")
-            
-            // Calculate SHA256 for quick comparison
-            val sha256 = java.security.MessageDigest.getInstance("SHA-256")
-            val hash = sha256.digest(data).joinToString("") { "%02x".format(it) }
-            Log.d(TAG, "[TEST-WG→Server] SHA256: $hash")
-            
-            Log.d(TAG, "[WG→Server] Using obfuscation params: key=$obfuscationKey, fnInitor=$obfuscationFnInitor")
-            
-            Log.d(TAG, "[WG→Server] Obfuscating ${data.size} bytes")
-            // Obfuscate and send to server
             val obfuscated = obfuscator.obfuscate(data)
-            Log.d(TAG, "[WG→Server] After obfuscation: ${obfuscated.size} bytes")
-            val obfPreview = obfuscated.take(16).joinToString(" ") { "%02x".format(it) }
-            Log.d(TAG, "[WG→Server] Obfuscated data preview: $obfPreview...")
-            
             val packet = protocolTemplate.encapsulate(obfuscated, clientID)
-            Log.d(TAG, "[WG→Server] After template: ${packet.size} bytes, sending to ${config.remoteAddress}:$newServerPort")
-            
             protocolTemplate.updateState()
-            
             sendToNewServer(packet)
         } else {
             Log.w(TAG, "New server port is not available yet")
@@ -673,16 +652,6 @@ class MorphUdpClient(
         Log.d(TAG, "[Server→WG] After deobfuscation: ${deobfuscated.size} bytes, sending to WireGuard ${config.localWgAddress}:${config.localWgPort}")
         
         // Log ALL bytes of deobfuscated packet for verification
-        val fullHex = deobfuscated.joinToString(" ") { "%02x".format(it) }
-        Log.d(TAG, "[TEST-Server→WG] Deobfuscated packet (${deobfuscated.size} bytes):")
-        Log.d(TAG, "[TEST-Server→WG] HEX: $fullHex")
-        
-        // Calculate SHA256 for quick comparison
-        val sha256 = java.security.MessageDigest.getInstance("SHA-256")
-        val hash = sha256.digest(deobfuscated).joinToString("") { "%02x".format(it) }
-        Log.d(TAG, "[TEST-Server→WG] SHA256: $hash")
-        
-        // Send to local WireGuard
         sendToLocalWireGuard(deobfuscated)
     }
     
