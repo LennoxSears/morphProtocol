@@ -87,6 +87,9 @@ class Obfuscator(
         val comboIndex = ((header[0].toInt() and 0xFF) * (header[1].toInt() and 0xFF)) % totalCombinations
         val functionIndices = FunctionRegistry.getFunctionIndices(comboIndex, layer)
         
+        android.util.Log.d("Obfuscator", "🔧 Obfuscate: header=[${header[0].toInt() and 0xFF}, ${header[1].toInt() and 0xFF}, ${header[2].toInt() and 0xFF}], comboIndex=$comboIndex")
+        android.util.Log.d("Obfuscator", "🔧 Obfuscate: functionIndices=${functionIndices.joinToString(",")}")
+        
         // Apply obfuscation layers
         var data = input
         for (funcIndex in functionIndices) {

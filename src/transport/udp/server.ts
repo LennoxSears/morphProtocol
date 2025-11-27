@@ -386,6 +386,10 @@ server.on('message', async (message, remote) => {
             obfuscatedBuffer.byteOffset,
             obfuscatedBuffer.byteOffset + obfuscatedBuffer.byteLength
           );
+          // Log obfuscated data header for debugging
+          const obfuscatedHeader = Buffer.from(obfuscatedArrayBuffer).slice(0, 3);
+          logger.info(`[TEST-Deobfuscate] Header: [${obfuscatedHeader[0]}, ${obfuscatedHeader[1]}, ${obfuscatedHeader[2]}]`);
+          
           const deobfuscatedData = session.obfuscator.deobfuscation(obfuscatedArrayBuffer);
           
           logger.debug(`[Client→WG] After deobfuscation: ${deobfuscatedData.length} bytes, sending to WireGuard ${LOCALWG_ADDRESS}:${LOCALWG_PORT}`);
