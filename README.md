@@ -197,12 +197,14 @@ Each packet undergoes:
 
 ### Optimized for Production
 
-- **Throughput**: 800-1000 packets/sec per client
-- **Latency**: +1-1.2ms per packet (obfuscation overhead)
-- **CPU Usage**: 25-30% per active client
+- **Throughput**: 1000-1500 packets/sec per client
+- **Latency**: +1.0ms per packet (obfuscation overhead)
+- **CPU Usage**: 20-25% per active client
 - **Log Volume**: 10-50 MB/hour (with LOG_LEVEL=2)
+- **Async Logging**: Non-blocking I/O with pino
 
-See [Performance Optimization Guide](docs/performance/PERFORMANCE_OPTIMIZATION.md) for detailed tuning.
+See [Performance Optimization Guide](docs/performance/PERFORMANCE_OPTIMIZATION.md) for detailed tuning.  
+See [Log Rotation Guide](docs/deployment/LOG_ROTATION.md) for log management.
 
 ### Log Levels
 

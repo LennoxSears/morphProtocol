@@ -8,6 +8,7 @@ Complete documentation for the morphProtocol network traffic obfuscation system.
 - [Main README](../README.md) - Project overview and quick start
 - [Build Guide](deployment/BUILD.md) - Building and packaging
 - [Deployment Guide](deployment/DEPLOYMENT.md) - Production deployment
+- [Log Rotation](deployment/LOG_ROTATION.md) - Async logging and log rotation setup
 
 ### Core Documentation
 - [Architecture](architecture.md) - System architecture and design patterns
