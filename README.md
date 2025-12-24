@@ -202,7 +202,7 @@ Each packet undergoes:
 - **CPU Usage**: 25-30% per active client
 - **Log Volume**: 10-50 MB/hour (with LOG_LEVEL=2)
 
-See [PERFORMANCE_OPTIMIZATION.md](PERFORMANCE_OPTIMIZATION.md) for detailed performance tuning guide.
+See [Performance Optimization Guide](docs/performance/PERFORMANCE_OPTIMIZATION.md) for detailed tuning.
 
 ### Log Levels
 
@@ -215,6 +215,28 @@ LOG_LEVEL=4  # ERROR - Errors only
 ```
 
 **⚠️ Important**: Use `LOG_LEVEL=2` or higher in production for optimal performance.
+
+## Documentation
+
+### Core Documentation
+- [Architecture](docs/architecture.md) - System architecture and design
+- [Security](docs/SECURITY.md) - Security features and considerations
+
+### Performance
+- [Performance Optimization](docs/performance/PERFORMANCE_OPTIMIZATION.md) - Complete performance guide
+- [Migration Guide](docs/performance/MIGRATION_GUIDE.md) - Upgrading to optimized version
+- [Log Level Analysis](docs/performance/LOG_LEVEL_2_ANALYSIS.md) - Detailed overhead analysis
+- [Code Changes](docs/performance/CHANGES.md) - Optimization changes reference
+
+### Deployment
+- [Build Guide](docs/deployment/BUILD.md) - Building and packaging
+- [Deployment Guide](docs/deployment/DEPLOYMENT.md) - Production deployment
+
+### Mobile Development
+- [Android Client](docs/mobile/ANDROID_CLIENT.md) - Android implementation
+- [iOS Implementation](docs/mobile/IOS_IMPLEMENTATION_GUIDE.md) - iOS implementation
+- [Capacitor Plugin](docs/mobile/CAPACITOR_PLUGIN.md) - Plugin development
+- [Cross-Platform](docs/mobile/CROSS_PLATFORM_COMPATIBILITY.md) - Platform compatibility
 
 ## License
 
