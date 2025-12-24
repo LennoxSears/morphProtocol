@@ -316,15 +316,15 @@ server.on('message', async (message, remote) => {
         
         logger.debug(`[WG→Client] Received ${wgMessage.length} bytes from WireGuard for client ${clientID}`);
         
-        // Log ALL bytes of WireGuard response for verification
-        const wgHex = wgMessage.toString('hex').match(/.{1,2}/g)?.join(' ') || '';
-        logger.info(`[TEST-WG→Client] WireGuard response packet (${wgMessage.length} bytes):`);
-        logger.info(`[TEST-WG→Client] HEX: ${wgHex}`);
-        
-        // Calculate SHA256 for quick comparison
-        const crypto = require('crypto');
-        const wgHash = crypto.createHash('sha256').update(wgMessage).digest('hex');
-        logger.info(`[TEST-WG→Client] SHA256: ${wgHash}`);
+        // Test logs with lazy evaluation - only executes if TRACE enabled
+        if (logger.isTraceEnabled()) {
+          const crypto = require('crypto');
+          const wgHex = wgMessage.toString('hex').match(/.{1,2}/g)?.join(' ') || '';
+          const wgHash = crypto.createHash('sha256').update(wgMessage).digest('hex');
+          logger.trace(`[TEST-WG→Client] WireGuard response packet (${wgMessage.length} bytes):`);
+          logger.trace(`[TEST-WG→Client] HEX: ${wgHex}`);
+          logger.trace(`[TEST-WG→Client] SHA256: ${wgHash}`);
+        }
         
         // Obfuscate data from WireGuard
         // Convert Buffer to proper ArrayBuffer (avoid buffer pool issues)
@@ -356,7 +356,7 @@ server.on('message', async (message, remote) => {
         session.userInfo.traffic += packet.length;
         session.lastSeen = Date.now();
       } else {
-        logger.info(`Recieve data from ${clientID}`);
+        logger.debug(`Received data from ${clientID}`);
         // Data from client (with protocol template encapsulation)
         const session = activeSessions.get(clientID);
         if (!session) return;
@@ -386,23 +386,26 @@ server.on('message', async (message, remote) => {
             obfuscatedBuffer.byteOffset,
             obfuscatedBuffer.byteOffset + obfuscatedBuffer.byteLength
           );
-          // Log obfuscated data header for debugging
-          const obfuscatedHeader = Buffer.from(obfuscatedArrayBuffer).slice(0, 3);
-          logger.info(`[TEST-Deobfuscate] Header: [${obfuscatedHeader[0]}, ${obfuscatedHeader[1]}, ${obfuscatedHeader[2]}]`);
+          
+          // Test logs with lazy evaluation - only executes if TRACE enabled
+          if (logger.isTraceEnabled()) {
+            const obfuscatedHeader = Buffer.from(obfuscatedArrayBuffer).slice(0, 3);
+            logger.trace(`[TEST-Deobfuscate] Header: [${obfuscatedHeader[0]}, ${obfuscatedHeader[1]}, ${obfuscatedHeader[2]}]`);
+          }
           
           const deobfuscatedData = session.obfuscator.deobfuscation(obfuscatedArrayBuffer);
           
           logger.debug(`[Client→WG] After deobfuscation: ${deobfuscatedData.length} bytes, sending to WireGuard ${LOCALWG_ADDRESS}:${LOCALWG_PORT}`);
           
-          // Log ALL bytes for complete verification
-          const fullHex = Buffer.from(deobfuscatedData).toString('hex').match(/.{1,2}/g)?.join(' ') || '';
-          logger.info(`[TEST-Client→WG] Deobfuscated packet (${deobfuscatedData.length} bytes):`);
-          logger.info(`[TEST-Client→WG] HEX: ${fullHex}`);
-          
-          // Calculate SHA256 for quick comparison
-          const crypto = require('crypto');
-          const hash = crypto.createHash('sha256').update(Buffer.from(deobfuscatedData)).digest('hex');
-          logger.info(`[TEST-Client→WG] SHA256: ${hash}`);
+          // Test logs with lazy evaluation - only executes if TRACE enabled
+          if (logger.isTraceEnabled()) {
+            const crypto = require('crypto');
+            const fullHex = Buffer.from(deobfuscatedData).toString('hex').match(/.{1,2}/g)?.join(' ') || '';
+            const hash = crypto.createHash('sha256').update(Buffer.from(deobfuscatedData)).digest('hex');
+            logger.trace(`[TEST-Client→WG] Deobfuscated packet (${deobfuscatedData.length} bytes):`);
+            logger.trace(`[TEST-Client→WG] HEX: ${fullHex}`);
+            logger.trace(`[TEST-Client→WG] SHA256: ${hash}`);
+          }
           
           newSocket.send(deobfuscatedData, 0, deobfuscatedData.length, LOCALWG_PORT, LOCALWG_ADDRESS, (error) => {
             if (error) {

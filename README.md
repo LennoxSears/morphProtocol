@@ -45,6 +45,7 @@ Edit `.env` with your settings:
 - WireGuard connection details
 - API endpoints and authentication
 - Obfuscation parameters
+- **LOG_LEVEL** (0-4): Set to 2 for production, 0 for debugging with test logs
 
 ## Usage
 
@@ -191,6 +192,29 @@ Each packet undergoes:
 - **Censorship Circumvention**: Bypass government firewalls
 - **Traffic Disguise**: Make VPN traffic appear as random data
 - **Protocol Tunneling**: Encapsulate any UDP traffic
+
+## Performance
+
+### Optimized for Production
+
+- **Throughput**: 800-1000 packets/sec per client
+- **Latency**: +1-1.2ms per packet (obfuscation overhead)
+- **CPU Usage**: 25-30% per active client
+- **Log Volume**: 10-50 MB/hour (with LOG_LEVEL=2)
+
+See [PERFORMANCE_OPTIMIZATION.md](PERFORMANCE_OPTIMIZATION.md) for detailed performance tuning guide.
+
+### Log Levels
+
+```bash
+LOG_LEVEL=0  # TRACE - Test logs with hex dumps (SLOW - debugging only)
+LOG_LEVEL=1  # DEBUG - Detailed logs without expensive operations
+LOG_LEVEL=2  # INFO - Production recommended
+LOG_LEVEL=3  # WARN - Minimal logging
+LOG_LEVEL=4  # ERROR - Errors only
+```
+
+**⚠️ Important**: Use `LOG_LEVEL=2` or higher in production for optimal performance.
 
 ## License
 
