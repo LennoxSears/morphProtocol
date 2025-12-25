@@ -10,18 +10,6 @@ import { createTemplate } from '../../core/protocol-templates/template-factory';
 
 import { RateLimiter } from '../../core/rate-limiter';
 
-// //function to record concurrency client and max client
-// let clientStatOperation = function(ins:number) {
-//   let rawdata = fs.readFileSync('../clientStat.json', { encoding: 'utf8' });
-//   let clientStat = JSON.parse(rawdata);
-//   clientStat.current = clientStat.current + ins;
-//   if(clientStat.current < 0) {
-//     clientStat.current = 0
-//   }
-//   fs.writeFileSync('../clientStat.json', JSON.stringify(clientStat));
-//   return clientStat;
-// }
-
 const config = getServerConfig();
 const HOST_NAME = config.hostName;
 const HOST_IP = config.hostIp;
