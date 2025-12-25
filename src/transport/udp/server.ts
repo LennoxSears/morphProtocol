@@ -40,6 +40,7 @@ interface ClientSession {
   remoteAddress: string;
   remotePort: number;
   socket: dgram.Socket;
+  messageHandler?: (msg: Buffer, rinfo: dgram.RemoteInfo) => void;  // Store handler for cleanup
   obfuscator: Obfuscator;
   template: ProtocolTemplate;  // Protocol template for packet encapsulation
   userInfo: UserInfo;
@@ -75,6 +76,12 @@ function handleCloseMessage(remote: any) {
   
   // Report traffic and cleanup
   subTraffic(session.userInfo.userId, session.userInfo.traffic);
+  
+  // Remove event listener to prevent memory leak
+  if (session.messageHandler) {
+    session.socket.removeListener('message', session.messageHandler);
+  }
+  
   session.socket.close();
   
   // Remove from both indexes
@@ -104,6 +111,12 @@ function shutdownInactiveSession(clientID: string) {
   
   // Report traffic and cleanup
   subTraffic(session.userInfo.userId, session.userInfo.traffic);
+  
+  // Remove event listener to prevent memory leak
+  if (session.messageHandler) {
+    session.socket.removeListener('message', session.messageHandler);
+  }
+  
   session.socket.close();
   
   // Remove from both indexes
@@ -296,8 +309,9 @@ server.on('message', async (message, remote) => {
     logger.info(`Added to ipIndex: ${ipKey} → ${clientID}`);
     
     addClientNum(HOST_NAME);
+    
     // Handle messages from WireGuard
-    newSocket.on('message', (wgMessage, wgRemote) => {
+    const messageHandler = (wgMessage: Buffer, wgRemote: dgram.RemoteInfo) => {
       if (wgRemote.address === LOCALWG_ADDRESS && wgRemote.port === LOCALWG_PORT) {
         const session = activeSessions.get(clientID);
         if (!session) return;
@@ -406,7 +420,13 @@ server.on('message', async (message, remote) => {
           // Note: We only track download traffic (server → client), not upload
         }
       }
-    });
+    };
+    
+    // Store the handler in session for cleanup
+    session.messageHandler = messageHandler;
+    
+    // Register the message handler
+    newSocket.on('message', messageHandler);
 
     // Bind the socket to a random available port
     newSocket.bind(() => {
@@ -456,6 +476,12 @@ function gracefulShutdown() {
     try {
       const msg = encryptor.simpleEncrypt("server_shutdown");
       server.send(msg, 0, msg.length, session.remotePort, session.remoteAddress);
+      
+      // Remove event listener to prevent memory leak
+      if (session.messageHandler) {
+        session.socket.removeListener('message', session.messageHandler);
+      }
+      
       session.socket.close();
     } catch (error) {
       logger.error(`Error closing session ${clientID}:`, error);
