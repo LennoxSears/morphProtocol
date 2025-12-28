@@ -3,10 +3,20 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     
+    <!-- Android 9+ (API 28+) - Foreground service permission -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    
+    <!-- Android 14+ (API 34+) - Foreground service type permission -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    
+    <!-- Android 13+ (API 33+) - Notification permission for foreground service -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    
     <application>
         <service
             android:name=".MorphProtocolService"
             android:enabled="true"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 </manifest>

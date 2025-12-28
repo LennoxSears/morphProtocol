@@ -1,7 +1,13 @@
 package com.morphprotocol.capacitor
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
@@ -10,6 +16,7 @@ import android.os.Message
 import android.os.Messenger
 import android.os.RemoteException
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import com.morphprotocol.client.ConnectionResult
 import com.morphprotocol.client.MorphClient
 import com.morphprotocol.client.config.ClientConfig
@@ -24,6 +31,8 @@ class MorphProtocolService : Service() {
     
     companion object {
         private const val TAG = "MorphProtocolService"
+        private const val NOTIFICATION_ID = 1001
+        private const val CHANNEL_ID = "morph_protocol_channel"
         
         // Message types
         const val MSG_CONNECT = 1
@@ -74,9 +83,54 @@ class MorphProtocolService : Service() {
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "Service created")
+        createNotificationChannel()
+        startForeground()
     }
     
-
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "MorphProtocol VPN",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "MorphProtocol VPN Connection"
+                setShowBadge(false)
+            }
+            
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager?.createNotificationChannel(channel)
+        }
+    }
+    
+    private fun startForeground() {
+        val notification = createNotification("MorphProtocol VPN", "Service running")
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Android 10+ (API 29+) with foreground service type
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
+        
+        Log.d(TAG, "Service started as foreground")
+    }
+    
+    private fun createNotification(title: String, text: String): Notification {
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .build()
+    }
+    
+    private fun updateNotification(title: String, text: String) {
+        val notification = createNotification(title, text)
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        notificationManager?.notify(NOTIFICATION_ID, notification)
+    }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "Service started")
@@ -159,6 +213,9 @@ class MorphProtocolService : Service() {
                         
                         Log.d(TAG, "Connected successfully. Server port: ${result.serverPort}, Client port: ${result.clientPort}")
                         
+                        // Update notification
+                        updateNotification("MorphProtocol VPN", "Connected to server")
+                        
                         sendResponse(replyTo, MSG_CONNECT_SUCCESS, Bundle().apply {
                             putBoolean(KEY_SUCCESS, true)
                             putString(KEY_MESSAGE, result.message)
@@ -217,6 +274,9 @@ class MorphProtocolService : Service() {
             
             connectThread?.interrupt()
             connectThread = null
+            
+            // Update notification
+            updateNotification("MorphProtocol VPN", "Disconnected")
             
             Log.d(TAG, "Disconnected successfully")
             

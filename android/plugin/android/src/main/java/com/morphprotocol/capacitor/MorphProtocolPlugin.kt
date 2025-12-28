@@ -82,10 +82,23 @@ class MorphProtocolPlugin : Plugin() {
     
     @PluginMethod
     fun connect(call: PluginCall) {
-        if (serviceMessenger == null) {
-            call.reject("Service not connected")
+        // Ensure service is bound before attempting connection
+        if (!isBound || serviceMessenger == null) {
+            // Try to wait for service binding (Android 15/16 may take longer)
+            Handler(Looper.getMainLooper()).postDelayed({
+                if (!isBound || serviceMessenger == null) {
+                    call.reject("Service not connected. Please ensure service is started.")
+                    return@postDelayed
+                }
+                performConnect(call)
+            }, 500) // Wait 500ms for service to bind
             return
         }
+        
+        performConnect(call)
+    }
+    
+    private fun performConnect(call: PluginCall) {
         
         try {
             // Parse connection options
