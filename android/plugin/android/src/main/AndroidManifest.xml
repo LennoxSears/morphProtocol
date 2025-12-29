@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    
+    <!-- Android 12+ (API 31+) - Exact alarm permission for heartbeat -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     
     <!-- Android 9+ (API 28+) - Foreground service permission -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

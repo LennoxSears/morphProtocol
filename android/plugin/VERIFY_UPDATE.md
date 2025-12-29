@@ -27,63 +27,22 @@ npm install file:./android/plugin
 npx cap sync android --force
 ```
 
-## Step 2: Verify Permissions
+## Step 2: Add Required Permissions
 
-The plugin requires these permissions for Android 15/16:
-
-```xml
-<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-```
-
-### Automatic Verification Script
-
-Run the verification script:
-
-```bash
-cd android/plugin
-./verify-permissions.sh
-```
-
-Or specify your app's manifest path:
-
-```bash
-./verify-permissions.sh /path/to/your/app/android/app/src/main/AndroidManifest.xml
-```
-
-The script will:
-- ✅ Find your app's AndroidManifest.xml
-- ✅ Check for all 3 required permissions
-- ✅ Check service configuration
-- ✅ Show what's missing (if anything)
-
-### Manual Verification
-
-If you prefer to check manually:
-
-```bash
-# Find your app's AndroidManifest.xml
-find . -path "*/android/app/src/main/AndroidManifest.xml"
-
-# Check for permissions
-grep -E "FOREGROUND_SERVICE|POST_NOTIFICATIONS" /path/to/your/AndroidManifest.xml
-```
-
-You should see all 3 permissions listed.
-
-### If Permissions Are Missing
-
-Add them to your app's `AndroidManifest.xml` (usually at `android/app/src/main/AndroidManifest.xml`):
+Add these permissions to your app's `AndroidManifest.xml` (usually at `android/app/src/main/AndroidManifest.xml`):
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     
-    <!-- Add these permissions -->
+    <!-- Foreground service permissions (Android 9+) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    
+    <!-- Exact alarm permissions (Android 12+, required for heartbeat) -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     
     <application>
         <!-- Your app configuration -->
@@ -91,7 +50,10 @@ Add them to your app's `AndroidManifest.xml` (usually at `android/app/src/main/A
 </manifest>
 ```
 
-**Note**: Capacitor should auto-merge permissions from the plugin's manifest, but on Android 15/16 it's safer to explicitly declare them in your app's manifest.
+**Important**: 
+- `SCHEDULE_EXACT_ALARM` is required for the heartbeat mechanism
+- Without it, you'll see: "Caller needs to hold android.permission.SCHEDULE_EXACT_ALARM"
+- Capacitor should auto-merge these from the plugin, but explicitly declaring them is safer
 
 ## Step 3: Check Installation
 
@@ -215,7 +177,7 @@ adb logcat | grep -E "MorphProtocol|Morph" > morph_logs.txt
 
 ## Verification Checklist
 
-- [ ] **Permissions**: All 3 permissions present (run `./verify-permissions.sh`)
+- [ ] **Permissions**: All 5 permissions added to AndroidManifest.xml
 - [ ] **Plugin version**: Shows **1.0.1** in node_modules/package.json
 - [ ] **Kotlin files**: Exist in node_modules/@morphprotocol/capacitor-plugin/android/
 - [ ] **Files copied**: Kotlin files in android/capacitor-cordova-android-plugins/
@@ -247,17 +209,9 @@ The old plugin code is still running. Try:
 
 3. **Verify AndroidManifest.xml has required permissions**
    
-   Run the verification script:
+   Check `android/app/src/main/AndroidManifest.xml` contains all 5 permissions:
    ```bash
-   cd android/plugin
-   ./verify-permissions.sh
-   ```
-   
-   Or manually check `android/app/src/main/AndroidManifest.xml` contains:
-   ```xml
-   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+   grep -E "FOREGROUND_SERVICE|POST_NOTIFICATIONS|SCHEDULE_EXACT_ALARM|USE_EXACT_ALARM" android/app/src/main/AndroidManifest.xml
    ```
 
 4. **Rebuild app completely**
