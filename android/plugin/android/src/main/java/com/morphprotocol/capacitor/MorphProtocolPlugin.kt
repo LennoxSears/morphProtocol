@@ -10,6 +10,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.Message
 import android.os.Messenger
+import android.util.Log
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
@@ -19,12 +20,24 @@ import com.morphprotocol.client.test.ObfuscationDebugTest
 
 @CapacitorPlugin(name = "MorphProtocol")
 class MorphProtocolPlugin : Plugin() {
+    companion object {
+        private const val TAG = "MorphProtocolPlugin"
+        private const val PLUGIN_VERSION = "1.0.1"
+        private const val BUILD_TIMESTAMP = "2025-12-29T07:18:00Z"
+    }
+    
     private var serviceMessenger: Messenger? = null
     private var serviceConnection: ServiceConnection? = null
     private var isBound = false
 
     override fun load() {
         super.load()
+        Log.i(TAG, "========================================")
+        Log.i(TAG, "MorphProtocol Plugin Loading")
+        Log.i(TAG, "Version: $PLUGIN_VERSION")
+        Log.i(TAG, "Build: $BUILD_TIMESTAMP")
+        Log.i(TAG, "Android Version: ${android.os.Build.VERSION.SDK_INT}")
+        Log.i(TAG, "========================================")
         
         serviceConnection = object : ServiceConnection {
             override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -82,23 +95,36 @@ class MorphProtocolPlugin : Plugin() {
     
     @PluginMethod
     fun connect(call: PluginCall) {
+        Log.i(TAG, "========================================")
+        Log.i(TAG, "connect() called - PLUGIN VERSION $PLUGIN_VERSION")
+        Log.i(TAG, "Build timestamp: $BUILD_TIMESTAMP")
+        Log.i(TAG, "isBound: $isBound")
+        Log.i(TAG, "serviceMessenger: ${if (serviceMessenger != null) "CONNECTED" else "NULL"}")
+        Log.i(TAG, "Android SDK: ${android.os.Build.VERSION.SDK_INT}")
+        Log.i(TAG, "========================================")
+        
         // Ensure service is bound before attempting connection
         if (!isBound || serviceMessenger == null) {
+            Log.w(TAG, "Service not bound yet, waiting 500ms for binding...")
             // Try to wait for service binding (Android 15/16 may take longer)
             Handler(Looper.getMainLooper()).postDelayed({
                 if (!isBound || serviceMessenger == null) {
+                    Log.e(TAG, "Service still not bound after 500ms - REJECTING")
                     call.reject("Service not connected. Please ensure service is started.")
                     return@postDelayed
                 }
+                Log.i(TAG, "Service bound after delay, proceeding with connect")
                 performConnect(call)
             }, 500) // Wait 500ms for service to bind
             return
         }
         
+        Log.i(TAG, "Service already bound, proceeding immediately")
         performConnect(call)
     }
     
     private fun performConnect(call: PluginCall) {
+        Log.i(TAG, "performConnect() starting...")
         
         try {
             // Parse connection options
@@ -110,6 +136,8 @@ class MorphProtocolPlugin : Plugin() {
                 ?: return call.reject("userId is required")
             val encryptionKey = call.getString("encryptionKey")
                 ?: return call.reject("encryptionKey is required")
+            
+            Log.i(TAG, "Connection params: remoteAddress=$remoteAddress, remotePort=$remotePort, userId=$userId")
             
             // Optional parameters with defaults
             val localWgAddress = call.getString("localWgAddress") ?: "127.0.0.1"
@@ -140,10 +168,14 @@ class MorphProtocolPlugin : Plugin() {
                 putString(MorphProtocolService.KEY_PASSWORD, password)
             }
             
+            Log.i(TAG, "Sending MSG_CONNECT to service...")
+            
             message.replyTo = Messenger(object : Handler(Looper.getMainLooper()) {
                 override fun handleMessage(msg: Message) {
+                    Log.i(TAG, "Received response from service: msg.what=${msg.what}")
                     when (msg.what) {
                         MorphProtocolService.MSG_CONNECT_SUCCESS -> {
+                            Log.i(TAG, "Connection SUCCESS received from service")
                             val data = msg.data
                             val result = JSObject().apply {
                                 put("success", data.getBoolean(MorphProtocolService.KEY_SUCCESS))
@@ -161,6 +193,8 @@ class MorphProtocolPlugin : Plugin() {
                             val data = msg.data
                             val message = data.getString(MorphProtocolService.KEY_MESSAGE) ?: "Connection failed"
                             
+                            Log.e(TAG, "Connection ERROR received from service: $message")
+                            
                             // Notify listeners
                             notifyListeners("error", JSObject().apply {
                                 put("type", "error")
@@ -173,7 +207,9 @@ class MorphProtocolPlugin : Plugin() {
             })
             
             serviceMessenger?.send(message)
+            Log.i(TAG, "Message sent to service successfully")
         } catch (e: Exception) {
+            Log.e(TAG, "Exception in performConnect: ${e.message}", e)
             call.reject("Failed to connect: ${e.message}")
         }
     }

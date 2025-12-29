@@ -31,6 +31,8 @@ class MorphProtocolService : Service() {
     
     companion object {
         private const val TAG = "MorphProtocolService"
+        private const val SERVICE_VERSION = "1.0.1"
+        private const val BUILD_TIMESTAMP = "2025-12-29T07:18:00Z"
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "morph_protocol_channel"
         
@@ -82,13 +84,19 @@ class MorphProtocolService : Service() {
     
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "Service created")
+        Log.i(TAG, "========================================")
+        Log.i(TAG, "MorphProtocol Service Created")
+        Log.i(TAG, "Version: $SERVICE_VERSION")
+        Log.i(TAG, "Build: $BUILD_TIMESTAMP")
+        Log.i(TAG, "Android Version: ${Build.VERSION.SDK_INT}")
+        Log.i(TAG, "========================================")
         createNotificationChannel()
         startForeground()
     }
     
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Log.i(TAG, "Creating notification channel for Android ${Build.VERSION.SDK_INT}")
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "MorphProtocol VPN",
@@ -100,20 +108,26 @@ class MorphProtocolService : Service() {
             
             val notificationManager = getSystemService(NotificationManager::class.java)
             notificationManager?.createNotificationChannel(channel)
+            Log.i(TAG, "Notification channel created successfully")
+        } else {
+            Log.i(TAG, "Android ${Build.VERSION.SDK_INT} - notification channel not needed")
         }
     }
     
     private fun startForeground() {
+        Log.i(TAG, "Starting foreground service...")
         val notification = createNotification("MorphProtocol VPN", "Service running")
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             // Android 10+ (API 29+) with foreground service type
+            Log.i(TAG, "Android ${Build.VERSION.SDK_INT} - Using FOREGROUND_SERVICE_TYPE_DATA_SYNC")
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            Log.i(TAG, "Foreground service started with DATA_SYNC type (Android 15/16 compatible)")
         } else {
+            Log.i(TAG, "Android ${Build.VERSION.SDK_INT} - Using basic foreground service")
             startForeground(NOTIFICATION_ID, notification)
+            Log.i(TAG, "Foreground service started (legacy mode)")
         }
-        
-        Log.d(TAG, "Service started as foreground")
     }
     
     private fun createNotification(title: String, text: String): Notification {
@@ -151,7 +165,14 @@ class MorphProtocolService : Service() {
 
     
     private fun connectClient(data: Bundle, replyTo: Messenger?) {
+        Log.i(TAG, "========================================")
+        Log.i(TAG, "connectClient() called in service")
+        Log.i(TAG, "Service version: $SERVICE_VERSION")
+        Log.i(TAG, "isConnected: $isConnected")
+        Log.i(TAG, "========================================")
+        
         if (isConnected) {
+            Log.w(TAG, "Already connected, rejecting new connection request")
             sendResponse(replyTo, MSG_CONNECT_ERROR, Bundle().apply {
                 putBoolean(KEY_SUCCESS, false)
                 putString(KEY_MESSAGE, "Already connected")
@@ -169,6 +190,8 @@ class MorphProtocolService : Service() {
                 ?: throw IllegalArgumentException("userId is required")
             val encryptionKey = data.getString(KEY_ENCRYPTION_KEY)
                 ?: throw IllegalArgumentException("encryptionKey is required")
+            
+            Log.i(TAG, "Parsed connection params: remoteAddress=$remoteAddress, remotePort=$remotePort, userId=$userId")
             
             // Optional parameters with defaults
             val localWgAddress = data.getString(KEY_LOCAL_WG_ADDRESS) ?: "127.0.0.1"
@@ -199,19 +222,24 @@ class MorphProtocolService : Service() {
             )
             
             // Create and start client in a background thread (like old plugin)
+            Log.i(TAG, "Creating MorphClient with config...")
             morphClient = MorphClient(config, this@MorphProtocolService)
+            Log.i(TAG, "MorphClient created, starting connection thread...")
             
             connectThread = Thread {
+                Log.i(TAG, "Connection thread started")
                 try {
                     // Start client with callback for connection success
+                    Log.i(TAG, "Calling morphClient.start()...")
                     morphClient?.start { result ->
                         // This callback is invoked when handshake succeeds
+                        Log.i(TAG, "Connection callback invoked - handshake succeeded!")
                         isConnected = true
                         clientId = result.clientId
                         serverPort = result.serverPort
                         clientPort = result.clientPort
                         
-                        Log.d(TAG, "Connected successfully. Server port: ${result.serverPort}, Client port: ${result.clientPort}")
+                        Log.i(TAG, "Connected successfully. Server port: ${result.serverPort}, Client port: ${result.clientPort}")
                         
                         // Update notification
                         updateNotification("MorphProtocol VPN", "Connected to server")
