@@ -27,7 +27,73 @@ npm install file:./android/plugin
 npx cap sync android --force
 ```
 
-## Step 2: Check Installation
+## Step 2: Verify Permissions
+
+The plugin requires these permissions for Android 15/16:
+
+```xml
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+```
+
+### Automatic Verification Script
+
+Run the verification script:
+
+```bash
+cd android/plugin
+./verify-permissions.sh
+```
+
+Or specify your app's manifest path:
+
+```bash
+./verify-permissions.sh /path/to/your/app/android/app/src/main/AndroidManifest.xml
+```
+
+The script will:
+- ✅ Find your app's AndroidManifest.xml
+- ✅ Check for all 3 required permissions
+- ✅ Check service configuration
+- ✅ Show what's missing (if anything)
+
+### Manual Verification
+
+If you prefer to check manually:
+
+```bash
+# Find your app's AndroidManifest.xml
+find . -path "*/android/app/src/main/AndroidManifest.xml"
+
+# Check for permissions
+grep -E "FOREGROUND_SERVICE|POST_NOTIFICATIONS" /path/to/your/AndroidManifest.xml
+```
+
+You should see all 3 permissions listed.
+
+### If Permissions Are Missing
+
+Add them to your app's `AndroidManifest.xml` (usually at `android/app/src/main/AndroidManifest.xml`):
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <!-- Add these permissions -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    
+    <application>
+        <!-- Your app configuration -->
+    </application>
+</manifest>
+```
+
+**Note**: Capacitor should auto-merge permissions from the plugin's manifest, but on Android 15/16 it's safer to explicitly declare them in your app's manifest.
+
+## Step 3: Check Installation
 
 Verify the plugin files were copied:
 
@@ -50,7 +116,7 @@ ls -la android/capacitor-cordova-android-plugins/src/main/java/com/morphprotocol
 # Should show the same .kt files
 ```
 
-## Step 3: Verify Logs When Running App
+## Step 4: Verify Logs When Running App
 
 ### Expected Log Output
 
@@ -119,7 +185,7 @@ I/MorphProtocolPlugin: Received response from service: msg.what=2
 I/MorphProtocolPlugin: Connection SUCCESS received from service
 ```
 
-## Step 4: View Logs
+## Step 5: View Logs
 
 ### Using Android Studio
 1. Open Android Studio
@@ -149,14 +215,15 @@ adb logcat | grep -E "MorphProtocol|Morph" > morph_logs.txt
 
 ## Verification Checklist
 
-- [ ] Plugin version shows **1.0.1** in node_modules/package.json
-- [ ] Kotlin files exist in node_modules/@morphprotocol/capacitor-plugin/android/
-- [ ] Kotlin files copied to android/capacitor-cordova-android-plugins/
-- [ ] See "Version: 1.0.1" in plugin load logs
-- [ ] See "Version: 1.0.1" in service creation logs
-- [ ] See "Build: 2025-12-29T07:18:00Z" in logs
-- [ ] See "Android 15/16 compatible" message (if on Android 10+)
-- [ ] See "connect() called - PLUGIN VERSION 1.0.1" when calling connect()
+- [ ] **Permissions**: All 3 permissions present (run `./verify-permissions.sh`)
+- [ ] **Plugin version**: Shows **1.0.1** in node_modules/package.json
+- [ ] **Kotlin files**: Exist in node_modules/@morphprotocol/capacitor-plugin/android/
+- [ ] **Files copied**: Kotlin files in android/capacitor-cordova-android-plugins/
+- [ ] **Plugin logs**: See "Version: 1.0.1" in plugin load logs
+- [ ] **Service logs**: See "Version: 1.0.1" in service creation logs
+- [ ] **Build timestamp**: See "Build: 2025-12-29T07:18:00Z" in logs
+- [ ] **Android 15/16**: See "Android 15/16 compatible" message (if on Android 10+)
+- [ ] **Connect logs**: See "connect() called - PLUGIN VERSION 1.0.1"
 
 ## If You DON'T See Version 1.0.1 Logs
 
@@ -180,7 +247,13 @@ The old plugin code is still running. Try:
 
 3. **Verify AndroidManifest.xml has required permissions**
    
-   Check `android/app/src/main/AndroidManifest.xml` contains:
+   Run the verification script:
+   ```bash
+   cd android/plugin
+   ./verify-permissions.sh
+   ```
+   
+   Or manually check `android/app/src/main/AndroidManifest.xml` contains:
    ```xml
    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
